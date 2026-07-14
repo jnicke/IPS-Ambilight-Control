@@ -1,5 +1,2 @@
 .DS_Store
-Thumbs.db
-.idea/
-.vscode/
-vendor/
+*.log

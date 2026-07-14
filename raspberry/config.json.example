@@ -1,0 +1,9 @@
+{
+  "identifier": "27E85A46-3DF8-48F5-9608-58D33E7CE76B",
+  "address": "192.168.178.145",
+  "listen": "0.0.0.0",
+  "port": 8091,
+  "atvscript": "/home/pi/pyatv/bin/atvscript",
+  "reconnect_delay": 5,
+  "log_level": "INFO"
+}

@@ -22,7 +22,6 @@ class AmbilightControl extends IPSModule
     {
         parent::Create();
 
-        // WLED
         $this->RegisterPropertyString('WLEDHost', '');
         $this->RegisterPropertyInteger('WLEDPort', 80);
         $this->RegisterPropertyBoolean('WLEDHTTPS', false);
@@ -30,14 +29,12 @@ class AmbilightControl extends IPSModule
         $this->RegisterPropertyInteger('NightPreset', 2);
         $this->RegisterPropertyInteger('CleaningPreset', 3);
 
-        // HyperHDR
         $this->RegisterPropertyString('HyperHDRHost', '');
         $this->RegisterPropertyInteger('HyperHDRPort', 8090);
         $this->RegisterPropertyBoolean('HyperHDRHTTPS', false);
         $this->RegisterPropertyString('HyperHDRToken', '');
         $this->RegisterPropertyInteger('HyperHDRInstance', 0);
 
-        // Apple TV monitor on Raspberry Pi
         $this->RegisterPropertyBoolean('AppleTVEnabled', false);
         $this->RegisterPropertyString('AppleTVMonitorHost', '');
         $this->RegisterPropertyInteger('AppleTVMonitorPort', 8091);
@@ -45,96 +42,81 @@ class AmbilightControl extends IPSModule
         $this->RegisterPropertyString('AppleTVMonitorPath', '/status');
         $this->RegisterPropertyInteger('AppleTVPollInterval', 2);
 
-        // Automation / external media state
         $this->RegisterPropertyBoolean('AutomationEnabled', false);
         $this->RegisterPropertyInteger('SourceVariableID', 0);
         $this->RegisterPropertyString('PlayingValues', 'playing,play,on,live');
         $this->RegisterPropertyString('PausedValues', 'paused,pause,idle');
-        $this->RegisterPropertyString('OffValues', 'off,standby,stopped,unavailable,unknown');
+        $this->RegisterPropertyString('OffValues', 'off,standby,stopped,unavailable,unknown,offline');
         $this->RegisterPropertyInteger('PausedMode', self::MODE_WARM_WHITE);
         $this->RegisterPropertyInteger('UpdateInterval', 10);
         $this->RegisterPropertyBoolean('EnableDebug', false);
 
-        $this->RegisterProfileInteger('AMBI.Mode', 'Bulb', '', '', [
-            [self::MODE_OFF, $this->Translate('Off'), '', -1],
-            [self::MODE_LIVE, $this->Translate('Live'), '', -1],
-            [self::MODE_WARM_WHITE, $this->Translate('Warm white'), '', -1],
-            [self::MODE_NIGHT, $this->Translate('Night'), '', -1],
-            [self::MODE_CLEANING, $this->Translate('Cleaning'), '', -1]
-        ]);
-
-        $this->RegisterVariableInteger('Mode', $this->Translate('Mode'), 'AMBI.Mode', 10);
+        $this->RegisterVariableInteger('Mode', 'Mode', 'AMBI.Mode', 10);
         $this->EnableAction('Mode');
-        $this->RegisterVariableBoolean('Automation', $this->Translate('Automation'), '~Switch', 20);
-        $this->EnableAction('Automation');
-        $this->RegisterVariableString('MediaState', $this->Translate('Media state'), '', 30);
+        $this->RegisterVariableBoolean('AutomationActive', 'Automation active', '~Switch', 20);
+        $this->EnableAction('AutomationActive');
+        $this->RegisterVariableString('MediaState', 'Media state', '', 30);
 
-        $this->RegisterVariableBoolean('AppleTVOnline', $this->Translate('Apple TV online'), '~Switch', 40);
-        $this->RegisterVariableString('AppleTVPower', $this->Translate('Apple TV power'), '', 50);
-        $this->RegisterVariableString('AppleTVState', $this->Translate('Apple TV state'), '', 60);
-        $this->RegisterVariableString('AppleTVApp', $this->Translate('Apple TV app'), '', 70);
-        $this->RegisterVariableString('AppleTVTitle', $this->Translate('Apple TV title'), '', 80);
-        $this->RegisterVariableString('AppleTVMediaType', $this->Translate('Apple TV media type'), '', 90);
-        $this->RegisterVariableInteger('AppleTVMonitorUpdated', $this->Translate('Apple TV monitor updated'), '~UnixTimestamp', 95);
-        $this->RegisterVariableString('AppleTVError', $this->Translate('Apple TV error'), '', 96);
-
-        $this->RegisterVariableBoolean('WLEDOnline', $this->Translate('WLED online'), '~Switch', 100);
-        $this->RegisterVariableBoolean('WLEDPower', $this->Translate('WLED power'), '~Switch', 110);
+        $this->RegisterVariableBoolean('WLEDOnline', 'WLED online', '~Switch', 100);
+        $this->RegisterVariableBoolean('WLEDPower', 'WLED power', '~Switch', 110);
         $this->EnableAction('WLEDPower');
-        $this->RegisterVariableInteger('Brightness', $this->Translate('Brightness'), '~Intensity.255', 120);
-        $this->EnableAction('Brightness');
-        $this->RegisterVariableInteger('Preset', $this->Translate('Preset'), '', 130);
-        $this->EnableAction('Preset');
-        $this->RegisterVariableString('WLEDVersion', $this->Translate('WLED version'), '', 140);
-        $this->RegisterVariableString('WLEDDeviceName', $this->Translate('WLED device name'), '', 150);
+        $this->RegisterVariableInteger('WLEDBrightness', 'WLED brightness', '~Intensity.255', 120);
+        $this->EnableAction('WLEDBrightness');
+        $this->RegisterVariableString('WLEDName', 'WLED name', '', 130);
+        $this->RegisterVariableString('WLEDVersion', 'WLED version', '', 140);
 
-        $this->RegisterVariableBoolean('HyperHDROnline', $this->Translate('HyperHDR online'), '~Switch', 200);
-        $this->RegisterVariableBoolean('HyperHDREnabled', $this->Translate('HyperHDR enabled'), '~Switch', 210);
+        $this->RegisterVariableBoolean('HyperHDROnline', 'HyperHDR online', '~Switch', 200);
+        $this->RegisterVariableBoolean('HyperHDREnabled', 'HyperHDR enabled', '~Switch', 210);
         $this->EnableAction('HyperHDREnabled');
-        $this->RegisterVariableBoolean('GrabberActive', $this->Translate('Grabber active'), '~Switch', 220);
-        $this->RegisterVariableBoolean('LEDDeviceActive', $this->Translate('LED device active'), '~Switch', 230);
-        $this->RegisterVariableFloat('FPS', $this->Translate('FPS'), '', 240);
-        $this->RegisterVariableString('HyperHDRVersion', $this->Translate('HyperHDR version'), '', 250);
+        $this->RegisterVariableBoolean('GrabberActive', 'Grabber active', '~Switch', 220);
+        $this->RegisterVariableBoolean('LEDDeviceActive', 'LED device active', '~Switch', 230);
+        $this->RegisterVariableFloat('FPS', 'FPS', '', 240);
+        $this->RegisterVariableString('HyperHDRVersion', 'HyperHDR version', '', 250);
 
-        $this->RegisterVariableInteger('LastUpdate', $this->Translate('Last update'), '~UnixTimestamp', 300);
-        $this->RegisterVariableString('LastError', $this->Translate('Last error'), '', 310);
+        $this->RegisterVariableBoolean('AppleTVOnline', 'Apple TV online', '~Switch', 300);
+        $this->RegisterVariableString('AppleTVPower', 'Apple TV power', '', 310);
+        $this->RegisterVariableString('AppleTVState', 'Apple TV state', '', 320);
+        $this->RegisterVariableString('AppleTVApp', 'Apple TV app', '', 330);
+        $this->RegisterVariableString('AppleTVTitle', 'Apple TV title', '', 340);
+        $this->RegisterVariableString('AppleTVMediaType', 'Apple TV media type', '', 350);
+        $this->RegisterVariableInteger('AppleTVUpdated', 'Apple TV monitor updated', '~UnixTimestamp', 360);
+        $this->RegisterVariableString('AppleTVError', 'Apple TV error', '', 370);
 
-        $this->RegisterTimer('UpdateTimer', 0, 'AMBCTRL_Update($_IPS[\'TARGET\']);');
-        $this->RegisterTimer('AppleTVTimer', 0, 'AMBCTRL_UpdateAppleTV($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('UpdateTimer', 0, 'AMBI_Update($_IPS["TARGET"]);');
+        $this->RegisterTimer('AppleTVTimer', 0, 'AMBI_UpdateAppleTV($_IPS["TARGET"]);');
     }
 
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
+        $this->RegisterProfiles();
 
-        $interval = max(0, $this->ReadPropertyInteger('UpdateInterval'));
-        $this->SetTimerInterval('UpdateTimer', $interval * 1000);
-
-        $appleTVInterval = $this->HasAppleTVConfiguration()
-            ? max(1, $this->ReadPropertyInteger('AppleTVPollInterval'))
+        $this->SetTimerInterval('UpdateTimer', max(0, $this->ReadPropertyInteger('UpdateInterval')) * 1000);
+        $appleInterval = $this->ReadPropertyBoolean('AppleTVEnabled')
+            ? max(1, $this->ReadPropertyInteger('AppleTVPollInterval')) * 1000
             : 0;
-        $this->SetTimerInterval('AppleTVTimer', $appleTVInterval * 1000);
-        $this->SetValue('Automation', $this->ReadPropertyBoolean('AutomationEnabled'));
+        $this->SetTimerInterval('AppleTVTimer', $appleInterval);
 
-        $sourceID = $this->ReadPropertyInteger('SourceVariableID');
-        if ($sourceID > 0 && IPS_VariableExists($sourceID)) {
-            $this->RegisterMessage($sourceID, VM_UPDATE);
-        }
+        $this->SetValue('AutomationActive', $this->ReadPropertyBoolean('AutomationEnabled'));
+        $this->RegisterSourceVariableMessages();
 
-        if (!$this->HasWLEDConfiguration() && !$this->HasHyperHDRConfiguration() && !$this->HasAppleTVConfiguration()) {
+        if (!$this->HasAnyConfiguration()) {
             $this->SetStatus(self::STATUS_CONFIGURATION_MISSING);
             return;
         }
 
         $this->SetStatus(self::STATUS_ACTIVE);
         $this->Update();
-        $this->EvaluateSourceVariable();
     }
 
     public function MessageSink($TimeStamp, $SenderID, $Message, $Data): void
     {
-        if ($Message === VM_UPDATE && $SenderID === $this->ReadPropertyInteger('SourceVariableID')) {
-            $this->EvaluateSourceVariable();
+        if ($Message !== VM_UPDATE || $SenderID !== $this->ReadPropertyInteger('SourceVariableID')) {
+            return;
+        }
+
+        if ($this->GetValue('AutomationActive')) {
+            $this->SetMediaState((string) GetValue($SenderID));
         }
     }
 
@@ -144,47 +126,76 @@ class AmbilightControl extends IPSModule
             case 'Mode':
                 $this->SetMode((int) $Value);
                 break;
-            case 'Automation':
-                $this->SetValue('Automation', (bool) $Value);
-                if ((bool) $Value) {
-                    $this->EvaluateSourceVariable(true);
-                }
+            case 'AutomationActive':
+                $this->SetValue('AutomationActive', (bool) $Value);
                 break;
             case 'WLEDPower':
                 $this->SetWLEDPower((bool) $Value);
                 break;
-            case 'Brightness':
+            case 'WLEDBrightness':
                 $this->SetBrightness((int) $Value);
-                break;
-            case 'Preset':
-                $this->SetPreset((int) $Value);
                 break;
             case 'HyperHDREnabled':
                 $this->SetHyperHDREnabled((bool) $Value);
                 break;
             default:
-                throw new InvalidArgumentException('Invalid Ident: ' . $Ident);
+                throw new InvalidArgumentException('Unknown ident: ' . $Ident);
         }
     }
 
     public function Update(): bool
     {
-        $success = false;
+        $ok = true;
         if ($this->HasWLEDConfiguration()) {
-            $success = $this->UpdateWLED() || $success;
+            $ok = $this->UpdateWLED() && $ok;
         }
         if ($this->HasHyperHDRConfiguration()) {
-            $success = $this->UpdateHyperHDR() || $success;
+            $ok = $this->UpdateHyperHDR() && $ok;
         }
-        if ($this->HasAppleTVConfiguration()) {
-            $success = $this->UpdateAppleTV() || $success;
+        if ($this->ReadPropertyBoolean('AppleTVEnabled')) {
+            $ok = $this->UpdateAppleTV() && $ok;
         }
-        if ($success) {
-            $this->SetValue('LastUpdate', time());
-            $this->SetValue('LastError', '');
-            $this->SetStatus(self::STATUS_ACTIVE);
+        return $ok;
+    }
+
+    public function UpdateAppleTV(): bool
+    {
+        if (!$this->ReadPropertyBoolean('AppleTVEnabled')) {
+            $this->ResetAppleTVStatus();
+            return false;
         }
-        return $success;
+
+        $host = trim($this->ReadPropertyString('AppleTVMonitorHost'));
+        if ($host === '') {
+            $this->ResetAppleTVStatus('Monitor host missing');
+            return false;
+        }
+
+        $scheme = $this->ReadPropertyBoolean('AppleTVMonitorHTTPS') ? 'https' : 'http';
+        $path = '/' . ltrim(trim($this->ReadPropertyString('AppleTVMonitorPath')), '/');
+        $url = sprintf('%s://%s:%d%s', $scheme, $host, $this->ReadPropertyInteger('AppleTVMonitorPort'), $path);
+        $response = $this->HTTPRequest('GET', $url, null, [], 'AppleTV');
+
+        if ($response === null) {
+            $this->ResetAppleTVStatus('Monitor unavailable');
+            return false;
+        }
+
+        $online = (bool) ($response['online'] ?? false);
+        $state = strtolower(trim((string) ($response['state'] ?? 'offline')));
+        $this->SetValue('AppleTVOnline', $online);
+        $this->SetValue('AppleTVPower', (string) ($response['power'] ?? 'unknown'));
+        $this->SetValue('AppleTVState', $state);
+        $this->SetValue('AppleTVApp', (string) ($response['app'] ?? ''));
+        $this->SetValue('AppleTVTitle', (string) ($response['title'] ?? ''));
+        $this->SetValue('AppleTVMediaType', (string) ($response['media_type'] ?? ''));
+        $this->SetValue('AppleTVUpdated', (int) ($response['updated'] ?? time()));
+        $this->SetValue('AppleTVError', (string) ($response['error'] ?? ''));
+
+        if ($this->GetValue('AutomationActive')) {
+            $this->SetMediaState($online ? $state : 'offline');
+        }
+        return true;
     }
 
     public function TestWLED(): bool
@@ -204,265 +215,178 @@ class AmbilightControl extends IPSModule
 
     public function SetMode(int $Mode): bool
     {
-        if (!in_array($Mode, [self::MODE_OFF, self::MODE_LIVE, self::MODE_WARM_WHITE, self::MODE_NIGHT, self::MODE_CLEANING], true)) {
-            throw new InvalidArgumentException('Unsupported mode: ' . $Mode);
+        if (!in_array($Mode, [0, 1, 2, 3, 4], true)) {
+            throw new InvalidArgumentException('Invalid mode');
         }
 
-        $ok = true;
+        $success = true;
         switch ($Mode) {
             case self::MODE_OFF:
                 if ($this->HasHyperHDRConfiguration()) {
-                    $ok = $this->SetHyperHDREnabled(false) && $ok;
+                    $success = $this->SetHyperHDREnabled(false) && $success;
                 }
                 if ($this->HasWLEDConfiguration()) {
-                    $ok = $this->SetWLEDPower(false) && $ok;
+                    $success = $this->SetWLEDPower(false) && $success;
                 }
                 break;
             case self::MODE_LIVE:
                 if ($this->HasWLEDConfiguration()) {
-                    $ok = $this->SetWLEDPower(true) && $ok;
+                    $success = $this->SetWLEDPower(true) && $success;
                 }
                 if ($this->HasHyperHDRConfiguration()) {
-                    $ok = $this->SetHyperHDREnabled(true) && $ok;
+                    $success = $this->SetHyperHDREnabled(true) && $success;
                 }
                 break;
             case self::MODE_WARM_WHITE:
-                $ok = $this->ActivateWLEDPreset($this->ReadPropertyInteger('WarmWhitePreset')) && $ok;
+                $success = $this->ActivatePreset($this->ReadPropertyInteger('WarmWhitePreset'));
                 break;
             case self::MODE_NIGHT:
-                $ok = $this->ActivateWLEDPreset($this->ReadPropertyInteger('NightPreset')) && $ok;
+                $success = $this->ActivatePreset($this->ReadPropertyInteger('NightPreset'));
                 break;
             case self::MODE_CLEANING:
-                $ok = $this->ActivateWLEDPreset($this->ReadPropertyInteger('CleaningPreset')) && $ok;
+                $success = $this->ActivatePreset($this->ReadPropertyInteger('CleaningPreset'));
                 break;
         }
 
-        if ($ok) {
+        if ($success) {
             $this->SetValue('Mode', $Mode);
         }
-        return $ok;
+        return $success;
     }
 
-    public function SetMediaState(string $State): bool
+    public function SetMediaState(string $State): void
     {
-        $state = trim(mb_strtolower($State));
+        $state = strtolower(trim($State));
         $this->SetValue('MediaState', $state);
-        if (!(bool) $this->GetValue('Automation')) {
-            return true;
+
+        if (!$this->GetValue('AutomationActive')) {
+            return;
         }
 
         if ($this->ValueMatches($state, $this->ReadPropertyString('PlayingValues'))) {
-            return $this->SetMode(self::MODE_LIVE);
+            $this->SetMode(self::MODE_LIVE);
+        } elseif ($this->ValueMatches($state, $this->ReadPropertyString('PausedValues'))) {
+            $this->SetMode($this->ReadPropertyInteger('PausedMode'));
+        } elseif ($this->ValueMatches($state, $this->ReadPropertyString('OffValues'))) {
+            $this->SetMode(self::MODE_OFF);
         }
-        if ($this->ValueMatches($state, $this->ReadPropertyString('PausedValues'))) {
-            return $this->SetMode($this->ReadPropertyInteger('PausedMode'));
-        }
-        if ($this->ValueMatches($state, $this->ReadPropertyString('OffValues'))) {
-            return $this->SetMode(self::MODE_OFF);
-        }
-
-        $this->Debug('Automation', 'No mapping for media state: ' . $state);
-        return false;
     }
 
     public function SetWLEDPower(bool $State): bool
     {
-        return $this->SetWLEDState(['on' => $State]);
+        $result = $this->WLEDRequest('POST', '/json/state', ['on' => $State]);
+        if ($result === null) {
+            return false;
+        }
+        $this->SetValue('WLEDPower', $State);
+        return true;
     }
 
     public function SetBrightness(int $Brightness): bool
     {
-        return $this->SetWLEDState(['bri' => max(0, min(255, $Brightness))]);
+        $brightness = max(0, min(255, $Brightness));
+        $result = $this->WLEDRequest('POST', '/json/state', ['bri' => $brightness, 'on' => $brightness > 0]);
+        if ($result === null) {
+            return false;
+        }
+        $this->SetValue('WLEDBrightness', $brightness);
+        $this->SetValue('WLEDPower', $brightness > 0);
+        return true;
     }
 
     public function SetPreset(int $Preset): bool
     {
-        return $this->SetWLEDState(['ps' => max(0, min(250, $Preset)), 'on' => true]);
-    }
-
-    public function SetHyperHDREnabled(bool $State): bool
-    {
-        $response = $this->HyperHDRRequest('componentstate', [
-            'componentstate' => ['component' => 'ALL', 'state' => $State]
-        ]);
-        if ($response === null || (($response['success'] ?? true) === false)) {
+        if ($Preset <= 0) {
             return false;
         }
-        $this->SetValue('HyperHDREnabled', $State);
+        $result = $this->WLEDRequest('POST', '/json/state', ['ps' => $Preset, 'on' => true]);
+        return $result !== null;
+    }
+
+    public function SetHyperHDREnabled(bool $Enabled): bool
+    {
+        $response = $this->HyperHDRRequest('componentstate', [
+            'componentstate' => ['component' => 'ALL', 'state' => $Enabled]
+        ]);
+        if ($response === null || (($response['success'] ?? false) !== true)) {
+            return false;
+        }
+        $this->SetValue('HyperHDREnabled', $Enabled);
         return true;
     }
 
-    private function ActivateWLEDPreset(int $Preset): bool
+    private function ActivatePreset(int $Preset): bool
     {
-        $ok = true;
+        $success = true;
         if ($this->HasHyperHDRConfiguration()) {
-            $ok = $this->SetHyperHDREnabled(false) && $ok;
+            $success = $this->SetHyperHDREnabled(false) && $success;
         }
         if ($this->HasWLEDConfiguration()) {
-            $ok = $this->SetPreset($Preset) && $ok;
+            $success = $this->SetWLEDPower(true) && $success;
+            if ($Preset > 0) {
+                $success = $this->SetPreset($Preset) && $success;
+            }
         }
-        return $ok;
-    }
-
-    private function EvaluateSourceVariable(bool $Force = false): void
-    {
-        if (!$Force && !(bool) $this->GetValue('Automation')) {
-            return;
-        }
-        $sourceID = $this->ReadPropertyInteger('SourceVariableID');
-        if ($sourceID <= 0 || !IPS_VariableExists($sourceID)) {
-            return;
-        }
-        $formatted = (string) GetValueFormatted($sourceID);
-        $raw = GetValue($sourceID);
-        $state = is_string($raw) ? $raw : ($formatted !== '' ? $formatted : (string) $raw);
-        $this->SetMediaState($state);
+        return $success;
     }
 
     private function UpdateWLED(): bool
     {
-        $response = $this->WLEDRequest('GET', '/json/si');
-        if ($response === null || !isset($response['state'], $response['info'])) {
+        $data = $this->WLEDRequest('GET', '/json/si');
+        if ($data === null) {
             $this->SetValue('WLEDOnline', false);
             return false;
         }
-        $state = (array) $response['state'];
-        $info = (array) $response['info'];
+
+        $state = is_array($data['state'] ?? null) ? $data['state'] : [];
+        $info = is_array($data['info'] ?? null) ? $data['info'] : [];
         $this->SetValue('WLEDOnline', true);
         $this->SetValue('WLEDPower', (bool) ($state['on'] ?? false));
-        $this->SetValue('Brightness', max(0, min(255, (int) ($state['bri'] ?? 0))));
-        $this->SetValue('Preset', max(0, (int) ($state['ps'] ?? 0)));
+        $this->SetValue('WLEDBrightness', (int) ($state['bri'] ?? 0));
+        $this->SetValue('WLEDName', (string) ($info['name'] ?? ''));
         $this->SetValue('WLEDVersion', (string) ($info['ver'] ?? ''));
-        $this->SetValue('WLEDDeviceName', (string) ($info['name'] ?? ''));
         return true;
     }
 
     private function UpdateHyperHDR(): bool
     {
         $response = $this->HyperHDRRequest('serverinfo');
-        if ($response === null || (($response['success'] ?? true) === false)) {
+        if ($response === null || (($response['success'] ?? false) !== true)) {
             $this->ResetHyperHDRStatus();
             return false;
         }
 
-        $info = (array) ($response['info'] ?? []);
-        $components = (array) ($info['components'] ?? []);
+        $info = is_array($response['info'] ?? null) ? $response['info'] : [];
+        $components = is_array($info['components'] ?? null) ? $info['components'] : [];
         $all = false;
         $grabber = false;
-        $ledDevice = false;
+        $led = false;
         foreach ($components as $component) {
             if (!is_array($component)) {
                 continue;
             }
             $name = strtoupper((string) ($component['name'] ?? $component['component'] ?? ''));
-            $enabled = (bool) ($component['enabled'] ?? $component['state'] ?? false);
+            $enabled = (bool) ($component['enabled'] ?? false);
             if ($name === 'ALL') {
                 $all = $enabled;
             }
-            if (str_contains($name, 'GRABBER') || str_contains($name, 'V4L')) {
-                $grabber = $grabber || $enabled;
+            if (in_array($name, ['GRABBER', 'V4L', 'VIDEOGRABBER'], true)) {
+                $grabber = $enabled;
             }
-            if ($name === 'LEDDEVICE' || str_contains($name, 'LED')) {
-                $ledDevice = $ledDevice || $enabled;
-            }
-        }
-
-        $fps = 0.0;
-        foreach (['fps', 'videoFps', 'currentFps'] as $key) {
-            if (isset($info[$key]) && is_numeric($info[$key])) {
-                $fps = (float) $info[$key];
-                break;
-            }
-        }
-        if ($fps === 0.0 && isset($info['grabber']) && is_array($info['grabber'])) {
-            foreach (['fps', 'currentFps'] as $key) {
-                if (isset($info['grabber'][$key]) && is_numeric($info['grabber'][$key])) {
-                    $fps = (float) $info['grabber'][$key];
-                    break;
-                }
+            if (in_array($name, ['LEDDEVICE', 'LED'], true)) {
+                $led = $enabled;
             }
         }
 
-        $version = (string) ($info['version'] ?? $info['hyperhdrVersion'] ?? $response['version'] ?? '');
+        $fps = (float) ($info['fps'] ?? $info['videoFps'] ?? $info['currentFps'] ?? ($info['grabber']['fps'] ?? 0.0));
+        $version = (string) ($info['version'] ?? ($info['system']['hyperhdrVersion'] ?? ''));
         $this->SetValue('HyperHDROnline', true);
-        $this->SetValue('HyperHDREnabled', $all || $ledDevice);
+        $this->SetValue('HyperHDREnabled', $all || $grabber || $led);
         $this->SetValue('GrabberActive', $grabber);
-        $this->SetValue('LEDDeviceActive', $ledDevice);
+        $this->SetValue('LEDDeviceActive', $led);
         $this->SetValue('FPS', $fps);
         $this->SetValue('HyperHDRVersion', $version);
         return true;
-    }
-
-
-    public function UpdateAppleTV(): bool
-    {
-        $response = $this->AppleTVRequest();
-        if ($response === null) {
-            $this->ResetAppleTVStatus();
-            return false;
-        }
-
-        $online = (bool) ($response['online'] ?? false);
-        $state = trim(mb_strtolower((string) ($response['state'] ?? ($online ? 'idle' : 'offline'))));
-        $power = trim(mb_strtolower((string) ($response['power'] ?? 'unknown')));
-
-        $this->SetValue('AppleTVOnline', $online);
-        $this->SetValue('AppleTVPower', $power);
-        $this->SetValue('AppleTVState', $state);
-        $this->SetValue('AppleTVApp', (string) ($response['app'] ?? ''));
-        $this->SetValue('AppleTVTitle', (string) ($response['title'] ?? ''));
-        $this->SetValue('AppleTVMediaType', (string) ($response['media_type'] ?? ''));
-        $this->SetValue('AppleTVMonitorUpdated', max(0, (int) ($response['updated'] ?? $response['updated_at'] ?? 0)));
-        $this->SetValue('AppleTVError', (string) ($response['error'] ?? ''));
-
-        if (!$online) {
-            $this->SetMediaState('offline');
-            return false;
-        }
-
-        $this->SetMediaState($state);
-        return true;
-    }
-
-    private function AppleTVRequest(): ?array
-    {
-        if (!$this->HasAppleTVConfiguration()) {
-            return null;
-        }
-
-        $scheme = $this->ReadPropertyBoolean('AppleTVMonitorHTTPS') ? 'https' : 'http';
-        $path = trim($this->ReadPropertyString('AppleTVMonitorPath'));
-        if ($path === '') {
-            $path = '/status';
-        }
-        if (!str_starts_with($path, '/')) {
-            $path = '/' . $path;
-        }
-
-        $url = sprintf(
-            '%s://%s:%d%s',
-            $scheme,
-            trim($this->ReadPropertyString('AppleTVMonitorHost')),
-            $this->ReadPropertyInteger('AppleTVMonitorPort'),
-            $path
-        );
-
-        return $this->HTTPRequest('GET', $url, null, [], self::STATUS_APPLETV_UNREACHABLE, 'AppleTV');
-    }
-
-    private function ResetAppleTVStatus(): void
-    {
-        $this->SetValue('AppleTVOnline', false);
-        $this->SetValue('AppleTVPower', 'unknown');
-        $this->SetValue('AppleTVState', 'offline');
-        $this->SetValue('AppleTVApp', '');
-        $this->SetValue('AppleTVTitle', '');
-        $this->SetValue('AppleTVMediaType', '');
-        $this->SetValue('AppleTVMonitorUpdated', 0);
-        $this->SetValue('AppleTVError', 'Monitor nicht erreichbar');
-        if ((bool) $this->GetValue('Automation')) {
-            $this->SetMediaState('offline');
-        }
     }
 
     private function ResetHyperHDRStatus(): void
@@ -475,13 +399,19 @@ class AmbilightControl extends IPSModule
         $this->SetValue('HyperHDRVersion', '');
     }
 
-    private function SetWLEDState(array $State): bool
+    private function ResetAppleTVStatus(string $Error = ''): void
     {
-        $response = $this->WLEDRequest('POST', '/json/state', $State);
-        if ($response === null) {
-            return false;
+        $this->SetValue('AppleTVOnline', false);
+        $this->SetValue('AppleTVPower', 'unknown');
+        $this->SetValue('AppleTVState', 'offline');
+        $this->SetValue('AppleTVApp', '');
+        $this->SetValue('AppleTVTitle', '');
+        $this->SetValue('AppleTVMediaType', '');
+        $this->SetValue('AppleTVUpdated', time());
+        $this->SetValue('AppleTVError', $Error);
+        if ($this->GetValue('AutomationActive')) {
+            $this->SetMediaState('offline');
         }
-        return $this->UpdateWLED();
     }
 
     private function WLEDRequest(string $Method, string $Path, ?array $Payload = null): ?array
@@ -491,7 +421,7 @@ class AmbilightControl extends IPSModule
         }
         $scheme = $this->ReadPropertyBoolean('WLEDHTTPS') ? 'https' : 'http';
         $url = sprintf('%s://%s:%d%s', $scheme, trim($this->ReadPropertyString('WLEDHost')), $this->ReadPropertyInteger('WLEDPort'), $Path);
-        return $this->HTTPRequest($Method, $url, $Payload, [], self::STATUS_WLED_UNREACHABLE, 'WLED');
+        return $this->HTTPRequest($Method, $url, $Payload, [], 'WLED');
     }
 
     private function HyperHDRRequest(string $Command, array $Arguments = []): ?array
@@ -501,73 +431,81 @@ class AmbilightControl extends IPSModule
         }
         $scheme = $this->ReadPropertyBoolean('HyperHDRHTTPS') ? 'https' : 'http';
         $url = sprintf('%s://%s:%d/json-rpc', $scheme, trim($this->ReadPropertyString('HyperHDRHost')), $this->ReadPropertyInteger('HyperHDRPort'));
-        $payload = array_merge([
-            'command' => $Command,
-            'tan' => random_int(1, 2147483647)
-        ], $Arguments);
+        $payload = array_merge(['command' => $Command, 'tan' => random_int(1, 2147483647)], $Arguments);
         $headers = [];
         $token = trim($this->ReadPropertyString('HyperHDRToken'));
         if ($token !== '') {
             $headers[] = 'Authorization: Bearer ' . $token;
         }
-        return $this->HTTPRequest('POST', $url, $payload, $headers, self::STATUS_HYPERHDR_UNREACHABLE, 'HyperHDR');
+        return $this->HTTPRequest('POST', $url, $payload, $headers, 'HyperHDR');
     }
 
-    private function HTTPRequest(string $Method, string $URL, ?array $Payload, array $ExtraHeaders, int $ErrorStatus, string $Target): ?array
+    private function HTTPRequest(string $Method, string $Url, ?array $Payload, array $Headers, string $Label): ?array
     {
-        $headers = array_merge(['Accept: application/json'], $ExtraHeaders);
-        $options = [
-            CURLOPT_URL => $URL,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => 3,
-            CURLOPT_TIMEOUT => 7,
-            CURLOPT_CUSTOMREQUEST => $Method,
-            CURLOPT_HTTPHEADER => $headers
-        ];
+        $curl = curl_init($Url);
+        if ($curl === false) {
+            return null;
+        }
+        $requestHeaders = array_merge(['Accept: application/json'], $Headers);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 3);
+        curl_setopt($curl, CURLOPT_TIMEOUT, 5);
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $Method);
         if ($Payload !== null) {
-            try {
-                $json = json_encode($Payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
-            } catch (JsonException $e) {
-                $this->SetError($Target . ': ' . $e->getMessage(), self::STATUS_INVALID_RESPONSE);
+            $body = json_encode($Payload, JSON_UNESCAPED_SLASHES);
+            if ($body === false) {
+                curl_close($curl);
                 return null;
             }
-            $options[CURLOPT_POSTFIELDS] = $json;
-            $options[CURLOPT_HTTPHEADER][] = 'Content-Type: application/json';
+            $requestHeaders[] = 'Content-Type: application/json';
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $body);
+            $this->Debug($Label . ' request', $body);
         }
-        $this->Debug($Target . ' request', $Method . ' ' . $URL . ' ' . json_encode($Payload));
-        $curl = curl_init();
-        if ($curl === false) {
-            $this->SetError($Target . ': cURL initialization failed', $ErrorStatus);
-            return null;
-        }
-        curl_setopt_array($curl, $options);
-        $body = curl_exec($curl);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, $requestHeaders);
+        $raw = curl_exec($curl);
+        $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
         $error = curl_error($curl);
-        $statusCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
         curl_close($curl);
-        if ($body === false || $error !== '' || $statusCode < 200 || $statusCode >= 300) {
-            $this->SetError(sprintf('%s: HTTP %d %s', $Target, $statusCode, $error), $ErrorStatus);
-            $this->Debug($Target . ' error', (string) $body);
+
+        if (!is_string($raw) || $raw === '' || $httpCode < 200 || $httpCode >= 300) {
+            $this->Debug($Label . ' error', ['httpCode' => $httpCode, 'error' => $error, 'response' => $raw]);
             return null;
         }
-        try {
-            $decoded = json_decode((string) $body, true, 512, JSON_THROW_ON_ERROR);
-        } catch (JsonException $e) {
-            $this->SetError($Target . ': ' . $e->getMessage(), self::STATUS_INVALID_RESPONSE);
-            return null;
-        }
-        if (!is_array($decoded)) {
-            $this->SetError($Target . ': invalid response', self::STATUS_INVALID_RESPONSE);
-            return null;
-        }
-        $this->Debug($Target . ' response', json_encode($decoded));
-        return $decoded;
+        $this->Debug($Label . ' response', $raw);
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? $decoded : null;
     }
 
-    private function SetError(string $Message, int $Status): void
+    private function RegisterProfiles(): void
     {
-        $this->SetValue('LastError', $Message);
-        $this->SetStatus($Status);
+        if (!IPS_VariableProfileExists('AMBI.Mode')) {
+            IPS_CreateVariableProfile('AMBI.Mode', VARIABLETYPE_INTEGER);
+        }
+        IPS_SetVariableProfileAssociation('AMBI.Mode', 0, 'Off', '', -1);
+        IPS_SetVariableProfileAssociation('AMBI.Mode', 1, 'Live', '', -1);
+        IPS_SetVariableProfileAssociation('AMBI.Mode', 2, 'Warm white', '', -1);
+        IPS_SetVariableProfileAssociation('AMBI.Mode', 3, 'Night', '', -1);
+        IPS_SetVariableProfileAssociation('AMBI.Mode', 4, 'Cleaning', '', -1);
+    }
+
+    private function RegisterSourceVariableMessages(): void
+    {
+        foreach ($this->GetMessageList() as $senderID => $messages) {
+            if (in_array(VM_UPDATE, $messages, true)) {
+                $this->UnregisterMessage((int) $senderID, VM_UPDATE);
+            }
+        }
+        $sourceID = $this->ReadPropertyInteger('SourceVariableID');
+        if ($sourceID > 0 && IPS_VariableExists($sourceID)) {
+            $this->RegisterMessage($sourceID, VM_UPDATE);
+        }
+    }
+
+    private function HasAnyConfiguration(): bool
+    {
+        return $this->HasWLEDConfiguration()
+            || $this->HasHyperHDRConfiguration()
+            || ($this->ReadPropertyBoolean('AppleTVEnabled') && trim($this->ReadPropertyString('AppleTVMonitorHost')) !== '');
     }
 
     private function HasWLEDConfiguration(): bool
@@ -580,34 +518,17 @@ class AmbilightControl extends IPSModule
         return trim($this->ReadPropertyString('HyperHDRHost')) !== '';
     }
 
-    private function HasAppleTVConfiguration(): bool
+    private function ValueMatches(string $Value, string $List): bool
     {
-        return $this->ReadPropertyBoolean('AppleTVEnabled')
-            && trim($this->ReadPropertyString('AppleTVMonitorHost')) !== '';
+        $values = array_filter(array_map(static fn(string $item): string => strtolower(trim($item)), explode(',', $List)));
+        return in_array(strtolower(trim($Value)), $values, true);
     }
 
-    private function ValueMatches(string $Value, string $CSV): bool
+    private function Debug(string $Message, $Data): void
     {
-        $values = array_filter(array_map(static fn(string $item): string => trim(mb_strtolower($item)), explode(',', $CSV)));
-        return in_array(trim(mb_strtolower($Value)), $values, true);
-    }
-
-    private function RegisterProfileInteger(string $Name, string $Icon, string $Prefix, string $Suffix, array $Associations): void
-    {
-        if (!IPS_VariableProfileExists($Name)) {
-            IPS_CreateVariableProfile($Name, VARIABLETYPE_INTEGER);
+        if (!$this->ReadPropertyBoolean('EnableDebug')) {
+            return;
         }
-        IPS_SetVariableProfileIcon($Name, $Icon);
-        IPS_SetVariableProfileText($Name, $Prefix, $Suffix);
-        foreach ($Associations as $association) {
-            IPS_SetVariableProfileAssociation($Name, $association[0], $association[1], $association[2], $association[3]);
-        }
-    }
-
-    private function Debug(string $Message, string $Data): void
-    {
-        if ($this->ReadPropertyBoolean('EnableDebug')) {
-            $this->SendDebug($Message, $Data, 0);
-        }
+        $this->SendDebug($Message, is_string($Data) ? $Data : json_encode($Data, JSON_UNESCAPED_SLASHES), 0);
     }
 }

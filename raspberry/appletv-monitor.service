@@ -1,5 +1,5 @@
 [Unit]
-Description=Apple TV monitor for IPS-Ambilight-Control
+Description=Apple TV Monitor for IPS Ambilight Control
 After=network-online.target
 Wants=network-online.target
 
@@ -7,16 +7,11 @@ Wants=network-online.target
 Type=simple
 User=pi
 Group=pi
+WorkingDirectory=/home/pi/appletv-monitor
 Environment=HOME=/home/pi
-WorkingDirectory=/home/pi
-ExecStart=/home/pi/pyatv/bin/python /opt/appletv-monitor/appletv-monitor.py --address 192.168.178.145 --listen 0.0.0.0 --port 8091 --atvscript /home/pi/pyatv/bin/atvscript
+ExecStart=/home/pi/pyatv/bin/python /home/pi/appletv-monitor/app.py
 Restart=always
 RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/home/pi
 
 [Install]
 WantedBy=multi-user.target

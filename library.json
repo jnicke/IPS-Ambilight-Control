@@ -1,12 +1,10 @@
 {
-  "id": "{4B2A7D9E-7C11-4B83-9F2E-6A6D9B5F8C21}",
-  "author": "J. Nicke",
-  "name": "IPS Ambilight Control",
+  "id": "{8A6ACF27-532D-4CB6-9E7C-80C7BEF34061}",
+  "author": "jnicke",
+  "name": "IPS-Ambilight-Control",
   "url": "https://github.com/jnicke/IPS-Ambilight-Control",
-  "compatibility": {
-    "version": "8.0"
-  },
-  "version": "0.6.0",
-  "build": 6,
-  "date": 1784035633
+  "compatibility": {"version": "8.0"},
+  "version": "0.6.1",
+  "build": 7,
+  "date": 1783987200
 }

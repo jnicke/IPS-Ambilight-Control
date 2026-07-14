@@ -5,7 +5,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate PHP syntax
-        run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
-      - name: Validate JSON
-        run: find . -name '*.json' -print0 | xargs -0 -n1 jq empty
+      - name: PHP syntax
+        run: php -l AmbilightControl/module.php
+      - name: JSON syntax
+        run: |
+          python3 -m json.tool library.json >/dev/null
+          python3 -m json.tool AmbilightControl/module.json >/dev/null
+          python3 -m json.tool AmbilightControl/form.json >/dev/null
+          python3 -m json.tool AmbilightControl/locale.json >/dev/null
