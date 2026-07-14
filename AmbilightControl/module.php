@@ -10,6 +10,7 @@ class AmbilightControl extends IPSModule
     private const STATUS_WLED_UNREACHABLE = 202;
     private const STATUS_HYPERHDR_UNREACHABLE = 203;
     private const STATUS_INVALID_RESPONSE = 204;
+    private const STATUS_APPLETV_UNREACHABLE = 205;
 
     private const MODE_OFF = 0;
     private const MODE_LIVE = 1;
@@ -36,6 +37,14 @@ class AmbilightControl extends IPSModule
         $this->RegisterPropertyString('HyperHDRToken', '');
         $this->RegisterPropertyInteger('HyperHDRInstance', 0);
 
+        // Apple TV monitor on Raspberry Pi
+        $this->RegisterPropertyBoolean('AppleTVEnabled', false);
+        $this->RegisterPropertyString('AppleTVMonitorHost', '');
+        $this->RegisterPropertyInteger('AppleTVMonitorPort', 8091);
+        $this->RegisterPropertyBoolean('AppleTVMonitorHTTPS', false);
+        $this->RegisterPropertyString('AppleTVMonitorPath', '/status');
+        $this->RegisterPropertyInteger('AppleTVPollInterval', 2);
+
         // Automation / external media state
         $this->RegisterPropertyBoolean('AutomationEnabled', false);
         $this->RegisterPropertyInteger('SourceVariableID', 0);
@@ -60,6 +69,15 @@ class AmbilightControl extends IPSModule
         $this->EnableAction('Automation');
         $this->RegisterVariableString('MediaState', $this->Translate('Media state'), '', 30);
 
+        $this->RegisterVariableBoolean('AppleTVOnline', $this->Translate('Apple TV online'), '~Switch', 40);
+        $this->RegisterVariableString('AppleTVPower', $this->Translate('Apple TV power'), '', 50);
+        $this->RegisterVariableString('AppleTVState', $this->Translate('Apple TV state'), '', 60);
+        $this->RegisterVariableString('AppleTVApp', $this->Translate('Apple TV app'), '', 70);
+        $this->RegisterVariableString('AppleTVTitle', $this->Translate('Apple TV title'), '', 80);
+        $this->RegisterVariableString('AppleTVMediaType', $this->Translate('Apple TV media type'), '', 90);
+        $this->RegisterVariableInteger('AppleTVMonitorUpdated', $this->Translate('Apple TV monitor updated'), '~UnixTimestamp', 95);
+        $this->RegisterVariableString('AppleTVError', $this->Translate('Apple TV error'), '', 96);
+
         $this->RegisterVariableBoolean('WLEDOnline', $this->Translate('WLED online'), '~Switch', 100);
         $this->RegisterVariableBoolean('WLEDPower', $this->Translate('WLED power'), '~Switch', 110);
         $this->EnableAction('WLEDPower');
@@ -82,6 +100,7 @@ class AmbilightControl extends IPSModule
         $this->RegisterVariableString('LastError', $this->Translate('Last error'), '', 310);
 
         $this->RegisterTimer('UpdateTimer', 0, 'AMBI_Update($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('AppleTVTimer', 0, 'AMBI_UpdateAppleTV($_IPS[\'TARGET\']);');
     }
 
     public function ApplyChanges(): void
@@ -90,6 +109,11 @@ class AmbilightControl extends IPSModule
 
         $interval = max(0, $this->ReadPropertyInteger('UpdateInterval'));
         $this->SetTimerInterval('UpdateTimer', $interval * 1000);
+
+        $appleTVInterval = $this->HasAppleTVConfiguration()
+            ? max(1, $this->ReadPropertyInteger('AppleTVPollInterval'))
+            : 0;
+        $this->SetTimerInterval('AppleTVTimer', $appleTVInterval * 1000);
         $this->SetValue('Automation', $this->ReadPropertyBoolean('AutomationEnabled'));
 
         $sourceID = $this->ReadPropertyInteger('SourceVariableID');
@@ -97,7 +121,7 @@ class AmbilightControl extends IPSModule
             $this->RegisterMessage($sourceID, VM_UPDATE);
         }
 
-        if (!$this->HasWLEDConfiguration() && !$this->HasHyperHDRConfiguration()) {
+        if (!$this->HasWLEDConfiguration() && !$this->HasHyperHDRConfiguration() && !$this->HasAppleTVConfiguration()) {
             $this->SetStatus(self::STATUS_CONFIGURATION_MISSING);
             return;
         }
@@ -152,6 +176,9 @@ class AmbilightControl extends IPSModule
         if ($this->HasHyperHDRConfiguration()) {
             $success = $this->UpdateHyperHDR() || $success;
         }
+        if ($this->HasAppleTVConfiguration()) {
+            $success = $this->UpdateAppleTV() || $success;
+        }
         if ($success) {
             $this->SetValue('LastUpdate', time());
             $this->SetValue('LastError', '');
@@ -168,6 +195,11 @@ class AmbilightControl extends IPSModule
     public function TestHyperHDR(): bool
     {
         return $this->UpdateHyperHDR();
+    }
+
+    public function TestAppleTV(): bool
+    {
+        return $this->UpdateAppleTV();
     }
 
     public function SetMode(int $Mode): bool
@@ -309,7 +341,7 @@ class AmbilightControl extends IPSModule
     {
         $response = $this->HyperHDRRequest('serverinfo');
         if ($response === null || (($response['success'] ?? true) === false)) {
-            $this->SetValue('HyperHDROnline', false);
+            $this->ResetHyperHDRStatus();
             return false;
         }
 
@@ -359,6 +391,88 @@ class AmbilightControl extends IPSModule
         $this->SetValue('FPS', $fps);
         $this->SetValue('HyperHDRVersion', $version);
         return true;
+    }
+
+
+    public function UpdateAppleTV(): bool
+    {
+        $response = $this->AppleTVRequest();
+        if ($response === null) {
+            $this->ResetAppleTVStatus();
+            return false;
+        }
+
+        $online = (bool) ($response['online'] ?? false);
+        $state = trim(mb_strtolower((string) ($response['state'] ?? ($online ? 'idle' : 'offline'))));
+        $power = trim(mb_strtolower((string) ($response['power'] ?? 'unknown')));
+
+        $this->SetValue('AppleTVOnline', $online);
+        $this->SetValue('AppleTVPower', $power);
+        $this->SetValue('AppleTVState', $state);
+        $this->SetValue('AppleTVApp', (string) ($response['app'] ?? ''));
+        $this->SetValue('AppleTVTitle', (string) ($response['title'] ?? ''));
+        $this->SetValue('AppleTVMediaType', (string) ($response['media_type'] ?? ''));
+        $this->SetValue('AppleTVMonitorUpdated', max(0, (int) ($response['updated'] ?? $response['updated_at'] ?? 0)));
+        $this->SetValue('AppleTVError', (string) ($response['error'] ?? ''));
+
+        if (!$online) {
+            $this->SetMediaState('offline');
+            return false;
+        }
+
+        $this->SetMediaState($state);
+        return true;
+    }
+
+    private function AppleTVRequest(): ?array
+    {
+        if (!$this->HasAppleTVConfiguration()) {
+            return null;
+        }
+
+        $scheme = $this->ReadPropertyBoolean('AppleTVMonitorHTTPS') ? 'https' : 'http';
+        $path = trim($this->ReadPropertyString('AppleTVMonitorPath'));
+        if ($path === '') {
+            $path = '/status';
+        }
+        if (!str_starts_with($path, '/')) {
+            $path = '/' . $path;
+        }
+
+        $url = sprintf(
+            '%s://%s:%d%s',
+            $scheme,
+            trim($this->ReadPropertyString('AppleTVMonitorHost')),
+            $this->ReadPropertyInteger('AppleTVMonitorPort'),
+            $path
+        );
+
+        return $this->HTTPRequest('GET', $url, null, [], self::STATUS_APPLETV_UNREACHABLE, 'AppleTV');
+    }
+
+    private function ResetAppleTVStatus(): void
+    {
+        $this->SetValue('AppleTVOnline', false);
+        $this->SetValue('AppleTVPower', 'unknown');
+        $this->SetValue('AppleTVState', 'offline');
+        $this->SetValue('AppleTVApp', '');
+        $this->SetValue('AppleTVTitle', '');
+        $this->SetValue('AppleTVMediaType', '');
+        $this->SetValue('AppleTVMonitorUpdated', 0);
+        $this->SetValue('AppleTVError', 'Monitor nicht erreichbar');
+        if ((bool) $this->GetValue('Automation')) {
+            $this->SetMediaState('offline');
+        }
+    }
+
+    private function ResetHyperHDRStatus(): void
+    {
+        $this->SetValue('HyperHDROnline', false);
+        $this->SetValue('HyperHDREnabled', false);
+        $this->SetValue('GrabberActive', false);
+        $this->SetValue('LEDDeviceActive', false);
+        $this->SetValue('FPS', 0.0);
+        $this->SetValue('HyperHDRVersion', '');
     }
 
     private function SetWLEDState(array $State): bool
@@ -464,6 +578,12 @@ class AmbilightControl extends IPSModule
     private function HasHyperHDRConfiguration(): bool
     {
         return trim($this->ReadPropertyString('HyperHDRHost')) !== '';
+    }
+
+    private function HasAppleTVConfiguration(): bool
+    {
+        return $this->ReadPropertyBoolean('AppleTVEnabled')
+            && trim($this->ReadPropertyString('AppleTVMonitorHost')) !== '';
     }
 
     private function ValueMatches(string $Value, string $CSV): bool
