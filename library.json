@@ -1,0 +1,12 @@
+{
+  "id": "{8A6ACF27-532D-4CB6-9E7C-80C7BEF34061}",
+  "author": "jnicke",
+  "name": "IPS-Ambilight-Control",
+  "url": "https://github.com/jnicke/IPS-Ambilight-Control",
+  "compatibility": {
+    "version": "8.0"
+  },
+  "version": "0.2.0",
+  "build": 2,
+  "date": 1783987200
+}

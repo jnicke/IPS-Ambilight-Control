@@ -1,0 +1,73 @@
+{
+  "elements": [
+    {
+      "type": "ExpansionPanel",
+      "caption": "WLED connection",
+      "items": [
+        {
+          "type": "ValidationTextBox",
+          "name": "WLEDHost",
+          "caption": "Host or IP address"
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "WLEDPort",
+          "caption": "Port",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "UpdateInterval",
+          "caption": "Update interval in seconds",
+          "minimum": 0,
+          "maximum": 86400
+        },
+        {
+          "type": "CheckBox",
+          "name": "EnableDebug",
+          "caption": "Extended debug output"
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "type": "Button",
+      "caption": "Test connection",
+      "onClick": "AMBI_TestConnection($id);"
+    },
+    {
+      "type": "Button",
+      "caption": "Refresh status",
+      "onClick": "AMBI_Update($id);"
+    }
+  ],
+  "status": [
+    {
+      "code": 102,
+      "icon": "active",
+      "caption": "Active"
+    },
+    {
+      "code": 104,
+      "icon": "inactive",
+      "caption": "Inactive"
+    },
+    {
+      "code": 201,
+      "icon": "error",
+      "caption": "WLED host is missing"
+    },
+    {
+      "code": 202,
+      "icon": "error",
+      "caption": "WLED is not reachable"
+    },
+    {
+      "code": 203,
+      "icon": "error",
+      "caption": "Invalid WLED response"
+    }
+  ]
+}

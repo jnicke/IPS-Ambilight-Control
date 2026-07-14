@@ -1,0 +1,25 @@
+{
+  "translations": {
+    "de": {
+      "WLED connection": "WLED-Verbindung",
+      "Host or IP address": "Hostname oder IP-Adresse",
+      "Port": "Port",
+      "Update interval in seconds": "Aktualisierungsintervall in Sekunden",
+      "Extended debug output": "Erweiterte Debug-Ausgabe",
+      "Test connection": "Verbindung testen",
+      "Refresh status": "Status aktualisieren",
+      "Active": "Aktiv",
+      "Inactive": "Inaktiv",
+      "WLED host is missing": "WLED-Host fehlt",
+      "WLED is not reachable": "WLED ist nicht erreichbar",
+      "Invalid WLED response": "Ungültige WLED-Antwort",
+      "Online": "Online",
+      "Power": "Ein/Aus",
+      "Brightness": "Helligkeit",
+      "Preset": "Preset",
+      "WLED version": "WLED-Version",
+      "Device name": "Gerätename",
+      "Last update": "Letzte Aktualisierung"
+    }
+  }
+}
