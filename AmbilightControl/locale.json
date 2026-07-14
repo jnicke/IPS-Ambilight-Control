@@ -50,7 +50,41 @@
       "FPS": "FPS",
       "HyperHDR version": "HyperHDR-Version",
       "Last update": "Letzte Aktualisierung",
-      "Last error": "Letzter Fehler"
+      "Last error": "Letzter Fehler",
+      "Apple TV monitor": "Apple-TV-Überwachung",
+      "Enable Apple TV monitoring": "Apple-TV-Überwachung aktivieren",
+      "Raspberry Pi host or IP address": "Raspberry-Pi-Hostname oder IP-Adresse",
+      "Monitor port": "Monitor-Port",
+      "Status path": "Statuspfad",
+      "Test Apple TV": "Apple TV testen",
+      "Apple TV monitor is not reachable": "Apple-TV-Monitor ist nicht erreichbar",
+      "Apple TV online": "Apple TV online",
+      "Apple TV power": "Apple-TV-Stromstatus",
+      "Apple TV state": "Apple-TV-Status",
+      "Apple TV app": "Apple-TV-App",
+      "Apple TV title": "Apple-TV-Titel",
+      "Apple TV media type": "Apple-TV-Medientyp",
+      "Apple TV polling interval in seconds": "Apple-TV-Abfrageintervall in Sekunden",
+      "Apple TV monitor updated": "Apple-TV-Monitor aktualisiert",
+      "Apple TV error": "Apple-TV-Fehler"
+    },
+    "en": {
+      "Apple TV monitor": "Apple TV monitor",
+      "Enable Apple TV monitoring": "Enable Apple TV monitoring",
+      "Raspberry Pi host or IP address": "Raspberry Pi host or IP address",
+      "Monitor port": "Monitor port",
+      "Status path": "Status path",
+      "Test Apple TV": "Test Apple TV",
+      "Apple TV monitor is not reachable": "Apple TV monitor is not reachable",
+      "Apple TV online": "Apple TV online",
+      "Apple TV power": "Apple TV power",
+      "Apple TV state": "Apple TV state",
+      "Apple TV app": "Apple TV app",
+      "Apple TV title": "Apple TV title",
+      "Apple TV media type": "Apple TV media type",
+      "Apple TV polling interval in seconds": "Apple TV polling interval in seconds",
+      "Apple TV monitor updated": "Apple TV monitor updated",
+      "Apple TV error": "Apple TV error"
     }
   }
 }

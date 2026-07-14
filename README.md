@@ -53,3 +53,31 @@ AMBI_SetHyperHDREnabled($InstanceID, true);
 ## Hinweise
 
 HyperHDR-Versionen können einzelne Felder in `serverinfo` unterschiedlich strukturieren. Das Modul wertet deshalb mehrere bekannte Feldvarianten defensiv aus. Eine direkte Apple-TV-Netzwerksteuerung ist nicht Bestandteil dieser Version; der Status wird über eine vorhandene Symcon-, Home-Assistant- oder MQTT-Variable eingebunden.
+
+
+## Apple-TV-Überwachung
+
+Die Apple-TV-Verbindung läuft über `pyatv` auf dem Raspberry Pi. Der kleine Monitor stellt den Status unter `http://<raspi>:8091/status` bereit. Die komplette Automatisierungslogik bleibt im IP-Symcon-Modul.
+
+Installation auf dem Raspberry Pi:
+
+```bash
+sudo mkdir -p /opt/appletv-monitor
+sudo cp raspberry/appletv-monitor.py /opt/appletv-monitor/
+sudo cp raspberry/appletv-monitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now appletv-monitor
+```
+
+Vorher in `appletv-monitor.service` bei Bedarf Apple-TV-Adresse, Benutzer und Pfade anpassen. Test:
+
+```bash
+curl http://127.0.0.1:8091/status
+```
+
+Im Modul anschließend Apple-TV-Überwachung aktivieren, als Host die interne LAN-Adresse des Raspberry Pi und als Port `8091` eintragen.
+
+
+## Apple TV in v0.6.0
+
+Der Apple-TV-Monitor wird über einen eigenen Timer abgefragt. Das Standardintervall beträgt zwei Sekunden und kann in der Modulkonfiguration angepasst werden. Die Zustände `playing`, `paused`, `idle`, `standby` und `offline` werden unmittelbar an die Automatik weitergereicht.

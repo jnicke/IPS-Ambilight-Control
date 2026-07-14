@@ -99,8 +99,8 @@ class AmbilightControl extends IPSModule
         $this->RegisterVariableInteger('LastUpdate', $this->Translate('Last update'), '~UnixTimestamp', 300);
         $this->RegisterVariableString('LastError', $this->Translate('Last error'), '', 310);
 
-        $this->RegisterTimer('UpdateTimer', 0, 'AMBI_Update($_IPS[\'TARGET\']);');
-        $this->RegisterTimer('AppleTVTimer', 0, 'AMBI_UpdateAppleTV($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('UpdateTimer', 0, 'AMBCTRL_Update($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('AppleTVTimer', 0, 'AMBCTRL_UpdateAppleTV($_IPS[\'TARGET\']);');
     }
 
     public function ApplyChanges(): void

@@ -1,8 +1,8 @@
 {
-  "id": "{893E4639-9B80-45A7-AE8D-23E975D508E6}",
+  "id": "{D6E7A5B2-0B8A-4D4A-9E8F-1F2A3B4C5D6E}",
   "name": "Ambilight Control",
   "type": 3,
-  "vendor": "jnicke",
+  "vendor": "Custom",
   "aliases": [
     "Ambilight Control"
   ],
@@ -10,5 +10,5 @@
   "parentRequirements": [],
   "childRequirements": [],
   "implemented": [],
-  "prefix": "AMBI"
+  "prefix": "AMBCTRL"
 }

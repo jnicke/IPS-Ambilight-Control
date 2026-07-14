@@ -1,21 +1,14 @@
 # Changelog
 
-## 0.4.0
+## 0.6.0
 
-- Quellenunabhängige Medienautomatik über eine IP-Symcon-Variable
-- Betriebsarten Aus, Live, Warmweiß, Nacht und Reinigung
-- Konfigurierbare Zustandszuordnung für Apple TV, Home Assistant und MQTT
-- Automatische Umschaltung zwischen HyperHDR-Livebetrieb und WLED-Presets
-- Erweiterte Diagnose- und Statusvariablen
+- Apple-TV-Monitor mit eigenem, konfigurierbarem Polling-Timer integriert.
+- Standardintervall für Apple TV auf 2 Sekunden gesetzt.
+- Statusvariablen für Monitor-Zeitstempel und Monitor-Fehler ergänzt.
+- Apple-TV-Zustände werden direkt an die Medienautomatik übergeben.
+- Offline-Zustände setzen alle Apple-TV-Statuswerte konsistent zurück.
+- Vollständiger Raspberry-Pi-Monitor und systemd-Service bleiben Bestandteil des Repositorys.
 
-## 0.3.0
+## 0.5.0
 
-- HyperHDR-JSON-RPC-Anbindung
-- ServerInfo-Auswertung
-- Komponenten-, Grabber-, LED-Geräte- und FPS-Status
-- Aktivieren und Deaktivieren von HyperHDR
-
-## 0.2.0
-
-- WLED-JSON-API
-- Ein/Aus, Helligkeit, Presets und Statusabfrage
+- Erste Apple-TV-Monitor-Anbindung über HTTP.
