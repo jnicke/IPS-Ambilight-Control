@@ -3,10 +3,8 @@
   "author": "jnicke",
   "name": "IPS-Ambilight-Control",
   "url": "https://github.com/jnicke/IPS-Ambilight-Control",
-  "compatibility": {
-    "version": "8.0"
-  },
-  "version": "0.2.0",
-  "build": 2,
+  "compatibility": {"version": "8.0"},
+  "version": "0.4.0",
+  "build": 4,
   "date": 1783987200
 }

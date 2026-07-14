@@ -1,43 +1,55 @@
 # IPS-Ambilight-Control
 
-IP-Symcon-Modul zur Steuerung und Überwachung eines WLED-Controllers.
+IP-Symcon-Modul zur gemeinsamen Steuerung und Überwachung von WLED und HyperHDR.
 
-## Funktionsumfang 0.2.0
+## Funktionsumfang v0.4.0
 
-- Verbindung zu WLED über die offizielle JSON API
-- Statusabfrage über `/json/si`
-- Ein-/Ausschalten
-- Helligkeit von 0 bis 255
-- Aufruf von Presets 0 bis 250
-- Anzeige von Gerätename, WLED-Version und letztem Update
-- konfigurierbares Abfrageintervall
-- Verbindungsstatus und Debug-Ausgabe
-- deutsche Übersetzung der Moduloberfläche
+- WLED JSON API: Status, Ein/Aus, Helligkeit und Presets
+- HyperHDR JSON-RPC: Serverstatus und Aktivieren/Deaktivieren aller Komponenten
+- Statusvariablen für WLED, HyperHDR, Grabber, LED-Gerät und FPS
+- Betriebsarten: Aus, Live, Warmweiß, Nacht und Reinigung
+- Automatische Umschaltung anhand einer beliebigen IP-Symcon-Variable
+- Geeignet für Medienstatus aus Home Assistant, MQTT, Apple-TV-Integrationen oder eigenen Skripten
+- Deutsch/Englisch, Debug-Ausgabe und zyklische Statusabfrage
 
 ## Installation
 
-1. Das Repository in IP-Symcon unter **Kerninstanzen > Modules** hinzufügen.
-2. Eine Instanz **Ambilight Control** anlegen.
-3. Hostname oder IP-Adresse des WLED-Controllers eintragen.
-4. Port und Aktualisierungsintervall festlegen.
-5. **Verbindung testen** ausführen.
+Das Repository über die Modulverwaltung von IP-Symcon hinzufügen und anschließend eine Instanz **Ambilight Control** anlegen.
 
-## Öffentliche Modulbefehle
+## WLED
+
+Hostname/IP und Port eintragen. Die drei Szenen Warmweiß, Nacht und Reinigung werden über vorhandene WLED-Presets abgebildet.
+
+## HyperHDR
+
+Hostname/IP und den Webserver-Port eintragen. Standardmäßig wird Port 8090 und der Endpunkt `/json-rpc` verwendet. Bei geschützter API kann ein Bearer-Token hinterlegt werden.
+
+## Automatik mit Home Assistant, MQTT oder Apple TV
+
+Die Integration ist absichtlich quellenunabhängig. Wähle als **Variable für Medienstatus** eine IP-Symcon-Variable aus, die beispielsweise einen Home-Assistant-`media_player`-Status, ein MQTT-Topic oder den Zustand einer Apple-TV-Integration enthält.
+
+Standardzuordnung:
+
+- `playing`, `play`, `on`, `live` → Live
+- `paused`, `pause`, `idle` → konfigurierbarer Pausenmodus
+- `off`, `standby`, `stopped`, `unavailable`, `unknown` → Aus
+
+Die Listen sind frei konfigurierbar.
+
+## Öffentliche Modulfunktionen
 
 ```php
 AMBI_Update($InstanceID);
-AMBI_TestConnection($InstanceID);
-AMBI_SetPower($InstanceID, true);
+AMBI_TestWLED($InstanceID);
+AMBI_TestHyperHDR($InstanceID);
+AMBI_SetMode($InstanceID, 1);             // 0 Aus, 1 Live, 2 Warmweiß, 3 Nacht, 4 Reinigung
+AMBI_SetMediaState($InstanceID, 'playing');
+AMBI_SetWLEDPower($InstanceID, true);
 AMBI_SetBrightness($InstanceID, 128);
 AMBI_SetPreset($InstanceID, 1);
+AMBI_SetHyperHDREnabled($InstanceID, true);
 ```
 
-## Voraussetzungen
+## Hinweise
 
-- IP-Symcon ab Version 8.0
-- WLED mit aktivierter HTTP/JSON-Schnittstelle
-- Netzwerkzugriff von IP-Symcon auf den WLED-Controller
-
-## Noch nicht enthalten
-
-HyperHDR, Hyperion, MQTT, Home Assistant und Apple TV sind für spätere Versionen vorgesehen.
+HyperHDR-Versionen können einzelne Felder in `serverinfo` unterschiedlich strukturieren. Das Modul wertet deshalb mehrere bekannte Feldvarianten defensiv aus. Eine direkte Apple-TV-Netzwerksteuerung ist nicht Bestandteil dieser Version; der Status wird über eine vorhandene Symcon-, Home-Assistant- oder MQTT-Variable eingebunden.

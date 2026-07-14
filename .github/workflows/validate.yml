@@ -1,9 +1,5 @@
 name: Validate
-
-on:
-  push:
-  pull_request:
-
+on: [push, pull_request]
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -11,5 +7,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate PHP syntax
         run: find . -name '*.php' -print0 | xargs -0 -n1 php -l
-      - name: Validate JSON syntax
+      - name: Validate JSON
         run: find . -name '*.json' -print0 | xargs -0 -n1 jq empty
