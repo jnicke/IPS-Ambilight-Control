@@ -389,8 +389,7 @@ class AmbilightControl extends IPSModule
         $url = sprintf('%s://%s:%d/json-rpc', $scheme, trim($this->ReadPropertyString('HyperHDRHost')), $this->ReadPropertyInteger('HyperHDRPort'));
         $payload = array_merge([
             'command' => $Command,
-            'tan' => random_int(1, 2147483647),
-            'instance' => max(0, $this->ReadPropertyInteger('HyperHDRInstance'))
+            'tan' => random_int(1, 2147483647)
         ], $Arguments);
         $headers = [];
         $token = trim($this->ReadPropertyString('HyperHDRToken'));
