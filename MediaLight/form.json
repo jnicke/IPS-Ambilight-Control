@@ -1,0 +1,73 @@
+{
+    "elements": [
+        {
+            "type": "ExpansionPanel",
+            "caption": "Allgemein",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "Active",
+                    "caption": "Modul aktiv"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "UpdateInterval",
+                    "caption": "Aktualisierungsintervall",
+                    "suffix": " Sekunden",
+                    "minimum": 1,
+                    "maximum": 3600
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "DebugEnabled",
+                    "caption": "Erweiterte Debug-Ausgabe"
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Projektstatus",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "MediaLight Core 1.0.0"
+                },
+                {
+                    "type": "Label",
+                    "caption": "HyperHDR-, WLED- und Apple-TV-Treiber werden in den folgenden Entwicklungsschritten ergänzt."
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Core testen",
+            "onClick": "AMBI_TestCore($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "Status aktualisieren",
+            "onClick": "AMBI_Update($id);"
+        }
+    ],
+    "status": [
+        {
+            "code": 102,
+            "icon": "active",
+            "caption": "Aktiv"
+        },
+        {
+            "code": 104,
+            "icon": "inactive",
+            "caption": "Inaktiv"
+        },
+        {
+            "code": 200,
+            "icon": "error",
+            "caption": "Konfigurationsfehler"
+        }
+    ]
+}
