@@ -2,18 +2,17 @@
 
 declare(strict_types=1);
 
-final class MediaLightHttpClient
+namespace MediaLight\Core;
+
+use JsonException;
+use RuntimeException;
+
+final class HttpClient
 {
-    private int $timeout;
-
-    private ?MediaLightLogger $logger;
-
     public function __construct(
-        int $timeout = 5,
-        ?MediaLightLogger $logger = null
+        private readonly int $timeout = 5,
+        private readonly ?Logger $logger = null
     ) {
-        $this->timeout = max(1, $timeout);
-        $this->logger = $logger;
     }
 
     /**
@@ -26,10 +25,10 @@ final class MediaLightHttpClient
         array $headers = []
     ): array {
         return $this->requestJson(
-            'GET',
-            $url,
-            null,
-            $headers
+            method: 'GET',
+            url: $url,
+            payload: null,
+            headers: $headers
         );
     }
 
@@ -45,10 +44,29 @@ final class MediaLightHttpClient
         array $headers = []
     ): array {
         return $this->requestJson(
-            'POST',
-            $url,
-            $payload,
-            $headers
+            method: 'POST',
+            url: $url,
+            payload: $payload,
+            headers: $headers
+        );
+    }
+
+    /**
+     * @param array<string, mixed>  $payload
+     * @param array<string, string> $headers
+     *
+     * @return array<string, mixed>
+     */
+    public function putJson(
+        string $url,
+        array $payload,
+        array $headers = []
+    ): array {
+        return $this->requestJson(
+            method: 'PUT',
+            url: $url,
+            payload: $payload,
+            headers: $headers
         );
     }
 
@@ -83,19 +101,30 @@ final class MediaLightHttpClient
         $options = [
             CURLOPT_URL            => $url,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_CONNECTTIMEOUT => $this->timeout,
-            CURLOPT_TIMEOUT        => $this->timeout,
-            CURLOPT_CUSTOMREQUEST  => $method,
+            CURLOPT_CONNECTTIMEOUT => max(1, $this->timeout),
+            CURLOPT_TIMEOUT        => max(1, $this->timeout),
+            CURLOPT_CUSTOMREQUEST  => strtoupper($method),
             CURLOPT_HTTPHEADER     => $headerLines
         ];
 
         if ($payload !== null) {
-            $json = json_encode(
-                $payload,
-                JSON_UNESCAPED_SLASHES
-                | JSON_UNESCAPED_UNICODE
-                | JSON_THROW_ON_ERROR
-            );
+            try {
+                $json = json_encode(
+                    $payload,
+                    JSON_UNESCAPED_SLASHES
+                    | JSON_UNESCAPED_UNICODE
+                    | JSON_THROW_ON_ERROR
+                );
+            } catch (JsonException $exception) {
+                curl_close($curl);
+
+                throw new RuntimeException(
+                    'HTTP-Nutzdaten konnten nicht als JSON codiert werden: '
+                    . $exception->getMessage(),
+                    0,
+                    $exception
+                );
+            }
 
             $headerLines[] = 'Content-Type: application/json';
 
@@ -106,11 +135,11 @@ final class MediaLightHttpClient
         curl_setopt_array($curl, $options);
 
         $this->logger?->debug(
-            'HTTP request',
+            'HTTP-Anfrage',
             [
-                'method' => $method,
-                'url'    => $url,
-                'body'   => $payload
+                'method'  => strtoupper($method),
+                'url'     => $url,
+                'payload' => $payload
             ]
         );
 
@@ -133,7 +162,7 @@ final class MediaLightHttpClient
         curl_close($curl);
 
         $this->logger?->debug(
-            'HTTP response',
+            'HTTP-Antwort',
             [
                 'statusCode' => $statusCode,
                 'body'       => $response
@@ -168,7 +197,7 @@ final class MediaLightHttpClient
 
         if (!is_array($decoded)) {
             throw new RuntimeException(
-                'Die JSON-Antwort ist kein Objekt oder Array.'
+                'Die HTTP-Antwort enthält kein JSON-Objekt.'
             );
         }
 

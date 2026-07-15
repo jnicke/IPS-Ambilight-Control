@@ -2,9 +2,14 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/core/Autoloader.php';
+require_once __DIR__ . '/src/Core/Autoloader.php';
 
-MediaLightAutoloader::register(__DIR__ . '/core');
+use MediaLight\Core\Autoloader;
+use MediaLight\Core\Config;
+use MediaLight\Core\HttpClient;
+use MediaLight\Core\Logger;
+
+Autoloader::register(__DIR__ . '/src');
 
 class MediaLight extends IPSModule
 {
@@ -83,7 +88,6 @@ class MediaLight extends IPSModule
         }
 
         $this->SetStatus(self::STATUS_ACTIVE);
-
         $this->SetValue('Mode', 'INITIALIZING');
         $this->SetValue('Scene', '');
         $this->SetValue('LastError', '');
@@ -91,7 +95,7 @@ class MediaLight extends IPSModule
         $this->getLogger()->info(
             'MediaLight wurde initialisiert.',
             [
-                'instanceId' => $this->InstanceID,
+                'instanceId'     => $this->InstanceID,
                 'updateInterval' => $config->getUpdateInterval()
             ]
         );
@@ -101,16 +105,14 @@ class MediaLight extends IPSModule
 
     public function Update(): void
     {
-        $config = $this->getConfig();
-
-        if (!$config->isActive()) {
+        if (!$this->getConfig()->isActive()) {
             return;
         }
 
-        $logger = $this->getLogger();
-
         try {
-            $logger->debug('Core-Aktualisierung gestartet.');
+            $this->getLogger()->debug(
+                'Core-Aktualisierung gestartet.'
+            );
 
             $this->SetValue('Online', true);
             $this->SetValue('Mode', 'READY');
@@ -119,10 +121,7 @@ class MediaLight extends IPSModule
                 date('d.m.Y H:i:s')
             );
             $this->SetValue('LastError', '');
-
             $this->SetStatus(self::STATUS_ACTIVE);
-
-            $logger->debug('Core-Aktualisierung beendet.');
         } catch (Throwable $exception) {
             $this->handleException(
                 'Update',
@@ -133,21 +132,25 @@ class MediaLight extends IPSModule
 
     public function TestCore(): void
     {
-        $logger = $this->getLogger();
-
         try {
             $config = $this->getConfig();
 
+            $httpClient = new HttpClient(
+                timeout: 5,
+                logger: $this->getLogger()
+            );
+
             $result = [
-                'instanceId' => $this->InstanceID,
-                'active' => $config->isActive(),
+                'instanceId'     => $this->InstanceID,
+                'active'         => $config->isActive(),
                 'updateInterval' => $config->getUpdateInterval(),
-                'debugEnabled' => $config->isDebugEnabled(),
-                'phpVersion' => PHP_VERSION,
-                'timestamp' => time()
+                'debugEnabled'   => $config->isDebugEnabled(),
+                'phpVersion'     => PHP_VERSION,
+                'httpClient'     => $httpClient::class,
+                'timestamp'      => time()
             ];
 
-            $logger->info(
+            $this->getLogger()->info(
                 'Core-Test erfolgreich.',
                 $result
             );
@@ -160,7 +163,7 @@ class MediaLight extends IPSModule
             );
             $this->SetValue('LastError', '');
 
-            echo 'MediaLight Core erfolgreich getestet.';
+            echo 'MediaLight Core mit PSR-4 erfolgreich getestet.';
         } catch (Throwable $exception) {
             $this->handleException(
                 'Core-Test',
@@ -172,12 +175,6 @@ class MediaLight extends IPSModule
         }
     }
 
-    /**
-     * Öffentliche Brücke für externe Hilfsklassen.
-     *
-     * SendDebug() selbst ist in IPSModule protected und darf deshalb
-     * ausschließlich innerhalb der Modulklasse aufgerufen werden.
-     */
     public function WriteDebug(
         string $sender,
         string $message,
@@ -190,19 +187,23 @@ class MediaLight extends IPSModule
         );
     }
 
-    private function getConfig(): MediaLightConfig
+    private function getConfig(): Config
     {
-        return new MediaLightConfig(
-            $this->ReadPropertyBoolean('Active'),
-            $this->ReadPropertyInteger('UpdateInterval'),
-            $this->ReadPropertyBoolean('DebugEnabled')
+        return new Config(
+            active: $this->ReadPropertyBoolean('Active'),
+            updateInterval: $this->ReadPropertyInteger(
+                'UpdateInterval'
+            ),
+            debugEnabled: $this->ReadPropertyBoolean(
+                'DebugEnabled'
+            )
         );
     }
 
-    private function getLogger(): MediaLightLogger
+    private function getLogger(): Logger
     {
-        return new MediaLightLogger(
-            function (
+        return new Logger(
+            debugWriter: function (
                 string $sender,
                 string $message,
                 int $format
@@ -213,7 +214,9 @@ class MediaLight extends IPSModule
                     $format
                 );
             },
-            $this->ReadPropertyBoolean('DebugEnabled')
+            debugEnabled: $this->ReadPropertyBoolean(
+                'DebugEnabled'
+            )
         );
     }
 
@@ -244,8 +247,9 @@ class MediaLight extends IPSModule
         $this->getLogger()->error(
             $message,
             [
-                'file' => $exception->getFile(),
-                'line' => $exception->getLine()
+                'class' => $exception::class,
+                'file'  => $exception->getFile(),
+                'line'  => $exception->getLine()
             ]
         );
     }

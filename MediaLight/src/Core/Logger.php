@@ -2,30 +2,26 @@
 
 declare(strict_types=1);
 
-final class MediaLightLogger
+namespace MediaLight\Core;
+
+final class Logger
 {
     /**
      * @var callable(string, string, int): void
      */
     private $debugWriter;
 
-    private bool $debugEnabled;
-
     /**
      * @param callable(string, string, int): void $debugWriter
      */
     public function __construct(
         callable $debugWriter,
-        bool $debugEnabled
+        private readonly bool $debugEnabled
     ) {
         $this->debugWriter = $debugWriter;
-        $this->debugEnabled = $debugEnabled;
     }
 
-    /**
-     * @param mixed $data
-     */
-    public function debug(string $message, $data = null): void
+    public function debug(string $message, mixed $data = null): void
     {
         if (!$this->debugEnabled) {
             return;
@@ -34,37 +30,25 @@ final class MediaLightLogger
         $this->write('DEBUG', $message, $data);
     }
 
-    /**
-     * @param mixed $data
-     */
-    public function info(string $message, $data = null): void
+    public function info(string $message, mixed $data = null): void
     {
         $this->write('INFO', $message, $data);
     }
 
-    /**
-     * @param mixed $data
-     */
-    public function warning(string $message, $data = null): void
+    public function warning(string $message, mixed $data = null): void
     {
         $this->write('WARNING', $message, $data);
     }
 
-    /**
-     * @param mixed $data
-     */
-    public function error(string $message, $data = null): void
+    public function error(string $message, mixed $data = null): void
     {
         $this->write('ERROR', $message, $data);
     }
 
-    /**
-     * @param mixed $data
-     */
     private function write(
         string $level,
         string $message,
-        $data = null
+        mixed $data = null
     ): void {
         $payload = $message;
 
