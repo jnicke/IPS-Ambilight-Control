@@ -8,9 +8,9 @@ use MediaLight\Core\Autoloader;
 use MediaLight\Core\Config;
 use MediaLight\Core\HttpClient;
 use MediaLight\Core\Logger;
+use MediaLight\Core\StatusManager;
 use MediaLight\Drivers\HyperHDR\Client as HyperHDRClient;
 use MediaLight\Drivers\HyperHDR\Driver as HyperHDRDriver;
-use MediaLight\Models\HyperHDR\Status as HyperHDRStatus;
 
 Autoloader::register(__DIR__ . '/src');
 
@@ -35,6 +35,147 @@ class MediaLight extends IPSModule
         $this->RegisterPropertyString('HyperHDRPath', '/json-rpc');
         $this->RegisterPropertyString('HyperHDRToken', '');
 
+        $this->registerGeneralVariables();
+        $this->registerHyperHDRVariables();
+
+        $this->RegisterTimer(
+            'UpdateTimer',
+            0,
+            'AMBI_Update($_IPS["TARGET"]);'
+        );
+    }
+
+    public function ApplyChanges(): void
+    {
+        parent::ApplyChanges();
+
+        $config = $this->getConfig();
+
+        $this->SetTimerInterval(
+            'UpdateTimer',
+            $config->isActive()
+                ? $config->getUpdateInterval() * 1000
+                : 0
+        );
+
+        if (!$config->isActive()) {
+            $this->SetStatus(self::STATUS_INACTIVE);
+            $this->SetValue('Online', false);
+            $this->SetValue('Mode', 'INACTIVE');
+            $this->getStatusManager()->resetHyperHDR();
+
+            return;
+        }
+
+        $this->SetStatus(self::STATUS_ACTIVE);
+        $this->SetValue('Mode', 'READY');
+        $this->SetValue('LastError', '');
+
+        $this->Update();
+    }
+
+    public function Update(): void
+    {
+        if (!$this->getConfig()->isActive()) {
+            return;
+        }
+
+        try {
+            if ($this->ReadPropertyBoolean('HyperHDREnabled')) {
+                $status = $this->getHyperHDRDriver()->readStatus();
+                $this->getStatusManager()->applyHyperHDR($status);
+            } else {
+                $this->getStatusManager()->resetHyperHDR();
+            }
+
+            $this->SetValue('Online', true);
+            $this->SetValue('Mode', 'READY');
+            $this->SetValue(
+                'LastUpdate',
+                date('d.m.Y H:i:s')
+            );
+            $this->SetValue('LastError', '');
+            $this->SetStatus(self::STATUS_ACTIVE);
+        } catch (Throwable $exception) {
+            $this->SetValue('Online', false);
+            $this->SetValue('Mode', 'ERROR');
+            $this->SetValue('LastError', $exception->getMessage());
+            $this->SetStatus(self::STATUS_HYPERHDR_OFFLINE);
+
+            $this->getStatusManager()->resetHyperHDR();
+
+            $this->getLogger()->error(
+                'Aktualisierung fehlgeschlagen',
+                [
+                    'exception' => $exception::class,
+                    'message'   => $exception->getMessage(),
+                    'file'      => $exception->getFile(),
+                    'line'      => $exception->getLine()
+                ]
+            );
+        }
+    }
+
+    public function TestCore(): void
+    {
+        echo 'MediaLight Core mit PSR-4 erfolgreich getestet.';
+    }
+
+    public function TestHyperHDR(): void
+    {
+        try {
+            $status = $this->getHyperHDRDriver()->readStatus();
+
+            $this->getStatusManager()->applyHyperHDR($status);
+
+            echo sprintf(
+                'HyperHDR erreichbar: %s, %s, %.2f FPS, %d LEDs',
+                $status->getHostname() !== ''
+                    ? $status->getHostname()
+                    : 'Hostname unbekannt',
+                $status->getVideoMode() !== ''
+                    ? $status->getVideoMode()
+                    : 'Videomodus unbekannt',
+                $status->getFps(),
+                $status->getLedCount()
+            );
+        } catch (Throwable $exception) {
+            $this->getStatusManager()->resetHyperHDR();
+            $this->SetValue('LastError', $exception->getMessage());
+
+            echo 'HyperHDR-Test fehlgeschlagen: '
+                . $exception->getMessage();
+        }
+    }
+
+    public function WriteDebug(
+        string $sender,
+        string $message,
+        int $format = 0
+    ): void {
+        $this->SendDebug($sender, $message, $format);
+    }
+
+    public function WriteValue(
+        string $ident,
+        mixed $value
+    ): void {
+        $variableId = @$this->GetIDForIdent($ident);
+
+        if ($variableId <= 0) {
+            $this->getLogger()->warning(
+                'Statusvariable nicht gefunden',
+                ['ident' => $ident]
+            );
+
+            return;
+        }
+
+        $this->SetValue($ident, $value);
+    }
+
+    private function registerGeneralVariables(): void
+    {
         $this->RegisterVariableBoolean(
             'Online',
             'MediaLight online',
@@ -62,240 +203,184 @@ class MediaLight extends IPSModule
             '',
             40
         );
+    }
+
+    private function registerHyperHDRVariables(): void
+    {
+        $position = 100;
 
         $this->RegisterVariableBoolean(
             'HyperHDROnline',
             'HyperHDR online',
             '~Switch',
-            100
+            $position += 10
         );
 
         $this->RegisterVariableString(
             'HyperHDRVersion',
             'HyperHDR-Version',
             '',
-            110
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'HyperHDRHostname',
+            'HyperHDR-Hostname',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            'HyperHDRCurrentInstance',
+            'Aktuelle HyperHDR-Instanz',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'HyperHDRInstanceName',
+            'HyperHDR-Instanzname',
+            '',
+            $position += 10
         );
 
         $this->RegisterVariableBoolean(
             'HyperHDRInstanceEnabled',
             'HyperHDR-Instanz aktiv',
             '~Switch',
-            120
+            $position += 10
         );
 
         $this->RegisterVariableBoolean(
             'HyperHDRGrabberEnabled',
             'Videoaufnahme aktiv',
             '~Switch',
-            130
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'HyperHDRGrabberDevice',
+            'Grabber-Gerät',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'HyperHDRVideoMode',
+            'Videomodus',
+            '',
+            $position += 10
         );
 
         $this->RegisterVariableBoolean(
             'HyperHDRLEDDeviceEnabled',
             'LED-Gerät aktiv',
             '~Switch',
-            140
+            $position += 10
         );
 
         $this->RegisterVariableBoolean(
             'HyperHDRSmoothingEnabled',
             'Glättung aktiv',
             '~Switch',
-            150
+            $position += 10
+        );
+
+        $this->RegisterVariableBoolean(
+            'HyperHDRHDREnabled',
+            'HDR aktiv',
+            '~Switch',
+            $position += 10
+        );
+
+        $this->RegisterVariableBoolean(
+            'HyperHDRBlackBorderEnabled',
+            'Schwarzbalkenerkennung aktiv',
+            '~Switch',
+            $position += 10
+        );
+
+        $this->RegisterVariableBoolean(
+            'HyperHDRForwarderEnabled',
+            'Weiterleitung aktiv',
+            '~Switch',
+            $position += 10
         );
 
         $this->RegisterVariableFloat(
             'HyperHDRFPS',
             'HyperHDR FPS',
             '',
-            160
+            $position += 10
         );
 
         $this->RegisterVariableInteger(
             'HyperHDRVisiblePriority',
             'Sichtbare Priorität',
             '',
-            170
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'HyperHDRPriorityComponent',
+            'Prioritätskomponente',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'HyperHDRPriorityOwner',
+            'Prioritätsquelle',
+            '',
+            $position += 10
         );
 
         $this->RegisterVariableInteger(
             'HyperHDREffectCount',
             'Anzahl Effekte',
             '',
-            180
+            $position += 10
         );
 
-        $this->RegisterTimer(
-            'UpdateTimer',
-            0,
-            'AMBI_Update($_IPS["TARGET"]);'
+        $this->RegisterVariableInteger(
+            'HyperHDRLEDCount',
+            'Anzahl HyperHDR-LEDs',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableBoolean(
+            'HyperHDRWLEDConnected',
+            'WLED mit HyperHDR verbunden',
+            '~Switch',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            'HyperHDRSessionCount',
+            'Verbundene HyperHDR-Sitzungen',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'HyperHDRLastError',
+            'Letzter HyperHDR-Fehler',
+            '',
+            $position += 10
         );
     }
 
-    public function ApplyChanges(): void
+    private function getStatusManager(): StatusManager
     {
-        parent::ApplyChanges();
-
-        $config = $this->getConfig();
-
-        $this->SetTimerInterval(
-            'UpdateTimer',
-            $config->isActive()
-                ? $config->getUpdateInterval() * 1000
-                : 0
-        );
-
-        if (!$config->isActive()) {
-            $this->SetStatus(self::STATUS_INACTIVE);
-            $this->resetAllStatus();
-
-            return;
-        }
-
-        $this->SetStatus(self::STATUS_ACTIVE);
-        $this->SetValue('Mode', 'READY');
-        $this->SetValue('LastError', '');
-
-        $this->Update();
-    }
-
-    public function Update(): void
-    {
-        if (!$this->getConfig()->isActive()) {
-            return;
-        }
-
-        try {
-            if ($this->ReadPropertyBoolean('HyperHDREnabled')) {
-                $this->updateHyperHDR();
-            } else {
-                $this->resetHyperHDRStatus();
-            }
-
-            $this->SetValue('Online', true);
-            $this->SetValue(
-                'LastUpdate',
-                date('d.m.Y H:i:s')
-            );
-            $this->SetValue('LastError', '');
-            $this->SetStatus(self::STATUS_ACTIVE);
-        } catch (Throwable $exception) {
-            $this->SetValue('Online', false);
-            $this->SetValue('LastError', $exception->getMessage());
-            $this->SetStatus(self::STATUS_HYPERHDR_OFFLINE);
-
-            $this->resetHyperHDRStatus();
-
-            $this->getLogger()->error(
-                'Aktualisierung fehlgeschlagen',
-                [
-                    'exception' => $exception::class,
-                    'message'   => $exception->getMessage(),
-                    'file'      => $exception->getFile(),
-                    'line'      => $exception->getLine()
-                ]
-            );
-        }
-    }
-
-    public function TestCore(): void
-    {
-        $this->getLogger()->info(
-            'Core-Test erfolgreich.',
-            [
-                'phpVersion' => PHP_VERSION,
-                'instanceId' => $this->InstanceID
-            ]
-        );
-
-        echo 'MediaLight Core mit PSR-4 erfolgreich getestet.';
-    }
-
-    public function TestHyperHDR(): void
-    {
-        try {
-            $status = $this->getHyperHDRDriver()->readStatus();
-
-            $this->applyHyperHDRStatus($status);
-
-            echo sprintf(
-                'HyperHDR erreichbar. Version: %s, FPS: %.2f',
-                $status->getVersion() !== ''
-                    ? $status->getVersion()
-                    : 'unbekannt',
-                $status->getFps()
-            );
-        } catch (Throwable $exception) {
-            $this->resetHyperHDRStatus();
-            $this->SetValue('LastError', $exception->getMessage());
-
-            echo 'HyperHDR-Test fehlgeschlagen: '
-                . $exception->getMessage();
-        }
-    }
-
-    public function WriteDebug(
-        string $sender,
-        string $message,
-        int $format = 0
-    ): void {
-        $this->SendDebug($sender, $message, $format);
-    }
-
-    private function updateHyperHDR(): void
-    {
-        $status = $this->getHyperHDRDriver()->readStatus();
-
-        $this->applyHyperHDRStatus($status);
-    }
-
-    private function applyHyperHDRStatus(
-        HyperHDRStatus $status
-    ): void {
-        $this->SetValue(
-            'HyperHDROnline',
-            $status->isOnline()
-        );
-
-        $this->SetValue(
-            'HyperHDRVersion',
-            $status->getVersion()
-        );
-
-        $this->SetValue(
-            'HyperHDRInstanceEnabled',
-            $status->isInstanceEnabled()
-        );
-
-        $this->SetValue(
-            'HyperHDRGrabberEnabled',
-            $status->isGrabberEnabled()
-        );
-
-        $this->SetValue(
-            'HyperHDRLEDDeviceEnabled',
-            $status->isLedDeviceEnabled()
-        );
-
-        $this->SetValue(
-            'HyperHDRSmoothingEnabled',
-            $status->isSmoothingEnabled()
-        );
-
-        $this->SetValue(
-            'HyperHDRFPS',
-            $status->getFps()
-        );
-
-        $this->SetValue(
-            'HyperHDRVisiblePriority',
-            $status->getVisiblePriority()
-        );
-
-        $this->SetValue(
-            'HyperHDREffectCount',
-            $status->getEffectCount()
+        return new StatusManager(
+            valueWriter: function (
+                string $ident,
+                mixed $value
+            ): void {
+                $this->WriteValue($ident, $value);
+            },
+            logger: $this->getLogger()
         );
     }
 
@@ -308,18 +393,16 @@ class MediaLight extends IPSModule
             logger: $logger
         );
 
-        $client = new HyperHDRClient(
-            httpClient: $httpClient,
-            logger: $logger,
-            host: $this->ReadPropertyString('HyperHDRHost'),
-            port: $this->ReadPropertyInteger('HyperHDRPort'),
-            https: $this->ReadPropertyBoolean('HyperHDRHTTPS'),
-            path: $this->ReadPropertyString('HyperHDRPath'),
-            token: $this->ReadPropertyString('HyperHDRToken')
-        );
-
         return new HyperHDRDriver(
-            client: $client,
+            client: new HyperHDRClient(
+                httpClient: $httpClient,
+                logger: $logger,
+                host: $this->ReadPropertyString('HyperHDRHost'),
+                port: $this->ReadPropertyInteger('HyperHDRPort'),
+                https: $this->ReadPropertyBoolean('HyperHDRHTTPS'),
+                path: $this->ReadPropertyString('HyperHDRPath'),
+                token: $this->ReadPropertyString('HyperHDRToken')
+            ),
             logger: $logger
         );
     }
@@ -355,28 +438,5 @@ class MediaLight extends IPSModule
                 'DebugEnabled'
             )
         );
-    }
-
-    private function resetHyperHDRStatus(): void
-    {
-        $this->SetValue('HyperHDROnline', false);
-        $this->SetValue('HyperHDRVersion', '');
-        $this->SetValue('HyperHDRInstanceEnabled', false);
-        $this->SetValue('HyperHDRGrabberEnabled', false);
-        $this->SetValue('HyperHDRLEDDeviceEnabled', false);
-        $this->SetValue('HyperHDRSmoothingEnabled', false);
-        $this->SetValue('HyperHDRFPS', 0.0);
-        $this->SetValue('HyperHDRVisiblePriority', -1);
-        $this->SetValue('HyperHDREffectCount', 0);
-    }
-
-    private function resetAllStatus(): void
-    {
-        $this->SetValue('Online', false);
-        $this->SetValue('Mode', 'INACTIVE');
-        $this->SetValue('LastUpdate', '');
-        $this->SetValue('LastError', '');
-
-        $this->resetHyperHDRStatus();
     }
 }

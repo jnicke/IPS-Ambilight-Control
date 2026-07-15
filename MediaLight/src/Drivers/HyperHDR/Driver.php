@@ -26,78 +26,113 @@ final class Driver
 
         $components = $this->extractComponents($info);
 
-        $version = $this->findFirstString(
+        $currentInstance = isset($info['currentInstance'])
+            ? (int) $info['currentInstance']
+            : -1;
+
+        $instance = $this->findInstance(
             $info,
-            [
-                ['hyperhdr', 'version'],
-                ['version'],
-                ['system', 'hyperhdrVersion'],
-                ['system', 'version']
-            ]
+            $currentInstance
         );
 
-        $fps = $this->extractFps($info);
+        $grabbers = isset($info['grabbers']) && is_array($info['grabbers'])
+            ? $info['grabbers']
+            : [];
 
-        $visiblePriority = $this->extractVisiblePriority($info);
+        $currentGrabber = isset($grabbers['current'])
+            && is_array($grabbers['current'])
+                ? $grabbers['current']
+                : [];
+
+        $grabberDevice = isset($currentGrabber['device'])
+            ? (string) $currentGrabber['device']
+            : '';
+
+        $videoMode = isset($currentGrabber['videoMode'])
+            ? (string) $currentGrabber['videoMode']
+            : '';
+
+        $priority = $this->findVisiblePriority($info);
+
+        $sessions = isset($info['sessions']) && is_array($info['sessions'])
+            ? $info['sessions']
+            : [];
 
         $effects = isset($info['effects']) && is_array($info['effects'])
-            ? count($info['effects'])
-            : 0;
+            ? $info['effects']
+            : [];
 
-        $instanceEnabled = $this->componentEnabled(
-            $components,
-            ['ALL', 'HYPERHDR']
-        );
-
-        if (!$instanceEnabled) {
-            $instanceEnabled = $this->findFirstBool(
-                $info,
-                [
-                    ['instance', 'running'],
-                    ['instance', 'enabled'],
-                    ['running']
-                ],
-                true
-            );
-        }
+        $leds = isset($info['leds']) && is_array($info['leds'])
+            ? $info['leds']
+            : [];
 
         $status = new Status(
             online: true,
-            version: $version,
-            instanceEnabled: $instanceEnabled,
+            version: $this->extractVersion($info),
+            hostname: isset($info['hostname'])
+                ? (string) $info['hostname']
+                : '',
+            currentInstance: $currentInstance,
+            instanceName: $instance['name'],
+            instanceEnabled: $instance['running'],
             grabberEnabled: $this->componentEnabled(
                 $components,
-                [
-                    'VIDEOGRABBER',
-                    'V4L',
-                    'V4L2',
-                    'VIDEO'
-                ]
+                'VIDEOGRABBER'
             ),
+            grabberDevice: $grabberDevice,
+            videoMode: $videoMode,
             ledDeviceEnabled: $this->componentEnabled(
                 $components,
-                ['LEDDEVICE']
+                'LEDDEVICE'
             ),
             smoothingEnabled: $this->componentEnabled(
                 $components,
-                ['SMOOTHING']
+                'SMOOTHING'
             ),
-            fps: $fps,
-            visiblePriority: $visiblePriority,
-            effectCount: $effects,
+            hdrEnabled: $this->componentEnabled(
+                $components,
+                'HDR'
+            ),
+            blackBorderEnabled: $this->componentEnabled(
+                $components,
+                'BLACKBORDER'
+            ),
+            forwarderEnabled: $this->componentEnabled(
+                $components,
+                'FORWARDER'
+            ),
+            fps: $this->extractFpsFromVideoMode($videoMode),
+            visiblePriority: $priority['priority'],
+            priorityComponent: $priority['component'],
+            priorityOwner: $priority['owner'],
+            effectCount: count($effects),
+            ledCount: count($leds),
+            wledConnected: $this->containsWledSession($sessions),
+            sessionCount: count($sessions),
+            lastError: isset($info['lastError'])
+                ? (string) $info['lastError']
+                : '',
             rawResponse: $this->encodeResponse($response)
         );
 
         $this->logger->debug(
             'HyperHDR-Status ausgewertet',
             [
-                'version'          => $status->getVersion(),
-                'instanceEnabled'  => $status->isInstanceEnabled(),
-                'grabberEnabled'   => $status->isGrabberEnabled(),
-                'ledDeviceEnabled' => $status->isLedDeviceEnabled(),
-                'fps'              => $status->getFps(),
-                'visiblePriority'  => $status->getVisiblePriority(),
-                'effectCount'      => $status->getEffectCount()
+                'hostname'          => $status->getHostname(),
+                'currentInstance'   => $status->getCurrentInstance(),
+                'instanceName'      => $status->getInstanceName(),
+                'instanceEnabled'   => $status->isInstanceEnabled(),
+                'grabberEnabled'    => $status->isGrabberEnabled(),
+                'grabberDevice'     => $status->getGrabberDevice(),
+                'videoMode'         => $status->getVideoMode(),
+                'fps'               => $status->getFps(),
+                'visiblePriority'   => $status->getVisiblePriority(),
+                'priorityComponent' => $status->getPriorityComponent(),
+                'priorityOwner'     => $status->getPriorityOwner(),
+                'effectCount'       => $status->getEffectCount(),
+                'ledCount'          => $status->getLedCount(),
+                'wledConnected'     => $status->isWledConnected(),
+                'sessionCount'      => $status->getSessionCount()
             ]
         );
 
@@ -111,13 +146,13 @@ final class Driver
      */
     private function extractComponents(array $info): array
     {
-        $result = [];
+        $components = [];
 
         if (
             !isset($info['components'])
             || !is_array($info['components'])
         ) {
-            return $result;
+            return $components;
         }
 
         foreach ($info['components'] as $component) {
@@ -126,147 +161,165 @@ final class Driver
             }
 
             $name = strtoupper(
-                trim(
-                    (string) (
-                        $component['name']
-                        ?? $component['component']
-                        ?? ''
-                    )
-                )
+                trim((string) ($component['name'] ?? ''))
             );
 
             if ($name === '') {
                 continue;
             }
 
-            $result[$name] = (bool) (
-                $component['enabled']
-                ?? $component['state']
-                ?? false
+            $components[$name] = (bool) (
+                $component['enabled'] ?? false
             );
+        }
+
+        return $components;
+    }
+
+    /**
+     * @param array<string, bool> $components
+     */
+    private function componentEnabled(
+        array $components,
+        string $name
+    ): bool {
+        $normalized = strtoupper($name);
+
+        return $components[$normalized] ?? false;
+    }
+
+    /**
+     * @param array<string, mixed> $info
+     *
+     * @return array{name: string, running: bool}
+     */
+    private function findInstance(
+        array $info,
+        int $currentInstance
+    ): array {
+        if (
+            !isset($info['instance'])
+            || !is_array($info['instance'])
+        ) {
+            return [
+                'name' => '',
+                'running' => false
+            ];
+        }
+
+        foreach ($info['instance'] as $instance) {
+            if (!is_array($instance)) {
+                continue;
+            }
+
+            if (
+                isset($instance['instance'])
+                && (int) $instance['instance'] === $currentInstance
+            ) {
+                return [
+                    'name' => (string) (
+                        $instance['friendly_name'] ?? ''
+                    ),
+                    'running' => (bool) (
+                        $instance['running'] ?? false
+                    )
+                ];
+            }
+        }
+
+        return [
+            'name' => '',
+            'running' => false
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $info
+     *
+     * @return array{
+     *     priority: int,
+     *     component: string,
+     *     owner: string
+     * }
+     */
+    private function findVisiblePriority(array $info): array
+    {
+        $result = [
+            'priority' => -1,
+            'component' => '',
+            'owner' => ''
+        ];
+
+        if (
+            !isset($info['priorities'])
+            || !is_array($info['priorities'])
+        ) {
+            return $result;
+        }
+
+        foreach ($info['priorities'] as $priority) {
+            if (!is_array($priority)) {
+                continue;
+            }
+
+            if (!(bool) ($priority['visible'] ?? false)) {
+                continue;
+            }
+
+            return [
+                'priority' => (int) (
+                    $priority['priority'] ?? -1
+                ),
+                'component' => (string) (
+                    $priority['componentId'] ?? ''
+                ),
+                'owner' => (string) (
+                    $priority['owner'] ?? ''
+                )
+            ];
         }
 
         return $result;
     }
 
-    /**
-     * @param array<string, bool> $components
-     * @param string[]            $names
-     */
-    private function componentEnabled(
-        array $components,
-        array $names
-    ): bool {
-        foreach ($names as $name) {
-            $normalized = strtoupper($name);
-
-            if (
-                array_key_exists($normalized, $components)
-                && $components[$normalized]
-            ) {
-                return true;
-            }
+    private function extractFpsFromVideoMode(
+        string $videoMode
+    ): float {
+        if ($videoMode === '') {
+            return 0.0;
         }
 
-        return false;
+        if (
+            preg_match(
+                '/^\s*\d+x\d+x([0-9]+(?:\.[0-9]+)?)/i',
+                $videoMode,
+                $matches
+            ) === 1
+        ) {
+            return (float) $matches[1];
+        }
+
+        return 0.0;
     }
 
     /**
+     * `serverinfo` liefert bei HyperHDR 22 beta2 keine Version.
+     *
      * @param array<string, mixed> $info
      */
-    private function extractFps(array $info): float
+    private function extractVersion(array $info): string
     {
-        $paths = [
-            ['fps'],
-            ['videoFps'],
-            ['currentFps'],
-            ['grabber', 'fps'],
-            ['grabber', 'currentFps'],
-            ['performance', 'fps'],
-            ['performance', 'videoFps'],
-            ['videograbber', 'fps']
+        $candidates = [
+            $info['version'] ?? null,
+            $info['hyperhdrVersion'] ?? null
         ];
 
-        foreach ($paths as $path) {
-            $value = $this->getPathValue($info, $path);
-
-            if (is_int($value) || is_float($value)) {
-                return round((float) $value, 2);
-            }
-
-            if (is_string($value) && is_numeric($value)) {
-                return round((float) $value, 2);
-            }
-        }
-
-        $recursive = $this->findNumericByKey(
-            $info,
-            ['fps', 'currentfps', 'videofps']
-        );
-
-        return $recursive !== null
-            ? round($recursive, 2)
-            : 0.0;
-    }
-
-    /**
-     * @param array<string, mixed> $info
-     */
-    private function extractVisiblePriority(array $info): int
-    {
-        $direct = $this->getPathValue(
-            $info,
-            ['priorities', 'currentPriority']
-        );
-
-        if (is_numeric($direct)) {
-            return (int) $direct;
-        }
-
-        if (!isset($info['priorities'])) {
-            return -1;
-        }
-
-        $priorities = $info['priorities'];
-
-        if (is_array($priorities)) {
-            foreach ($priorities as $priority) {
-                if (!is_array($priority)) {
-                    continue;
-                }
-
-                if (
-                    (bool) (
-                        $priority['visible']
-                        ?? $priority['active']
-                        ?? false
-                    )
-                ) {
-                    return (int) (
-                        $priority['priority']
-                        ?? $priority['value']
-                        ?? -1
-                    );
-                }
-            }
-        }
-
-        return -1;
-    }
-
-    /**
-     * @param array<string, mixed> $source
-     * @param array<int, array<int, string>> $paths
-     */
-    private function findFirstString(
-        array $source,
-        array $paths
-    ): string {
-        foreach ($paths as $path) {
-            $value = $this->getPathValue($source, $path);
-
-            if (is_string($value) && trim($value) !== '') {
-                return trim($value);
+        foreach ($candidates as $candidate) {
+            if (
+                is_string($candidate)
+                && trim($candidate) !== ''
+            ) {
+                return trim($candidate);
             }
         }
 
@@ -274,79 +327,32 @@ final class Driver
     }
 
     /**
-     * @param array<string, mixed> $source
-     * @param array<int, array<int, string>> $paths
+     * @param array<int, mixed> $sessions
      */
-    private function findFirstBool(
-        array $source,
-        array $paths,
-        bool $default
-    ): bool {
-        foreach ($paths as $path) {
-            $value = $this->getPathValue($source, $path);
-
-            if (is_bool($value)) {
-                return $value;
+    private function containsWledSession(array $sessions): bool
+    {
+        foreach ($sessions as $session) {
+            if (!is_array($session)) {
+                continue;
             }
 
-            if (is_int($value)) {
-                return $value !== 0;
-            }
-        }
+            $name = strtolower(
+                (string) ($session['name'] ?? '')
+            );
 
-        return $default;
-    }
+            $host = strtolower(
+                (string) ($session['host'] ?? '')
+            );
 
-    /**
-     * @param array<string, mixed> $source
-     * @param string[]             $path
-     */
-    private function getPathValue(
-        array $source,
-        array $path
-    ): mixed {
-        $value = $source;
-
-        foreach ($path as $part) {
             if (
-                !is_array($value)
-                || !array_key_exists($part, $value)
+                str_contains($name, 'wled')
+                || str_contains($host, 'wled')
             ) {
-                return null;
-            }
-
-            $value = $value[$part];
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param array<string, mixed> $source
-     * @param string[]             $keys
-     */
-    private function findNumericByKey(
-        array $source,
-        array $keys
-    ): ?float {
-        foreach ($source as $key => $value) {
-            if (
-                in_array(strtolower((string) $key), $keys, true)
-                && is_numeric($value)
-            ) {
-                return (float) $value;
-            }
-
-            if (is_array($value)) {
-                $found = $this->findNumericByKey($value, $keys);
-
-                if ($found !== null) {
-                    return $found;
-                }
+                return true;
             }
         }
 
-        return null;
+        return false;
     }
 
     /**
