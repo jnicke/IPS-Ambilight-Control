@@ -11,6 +11,10 @@ use MediaLight\Core\Logger;
 use MediaLight\Core\StatusManager;
 use MediaLight\Drivers\HyperHDR\Client as HyperHDRClient;
 use MediaLight\Drivers\HyperHDR\Driver as HyperHDRDriver;
+use MediaLight\Drivers\WLED\Client as WLEDClient;
+use MediaLight\Drivers\WLED\Driver as WLEDDriver;
+use MediaLight\Drivers\WLED\Mapper as WLEDMapper;
+use MediaLight\Models\WLED\Controller as WLEDController;
 
 Autoloader::register(__DIR__ . '/src');
 
@@ -19,24 +23,17 @@ class MediaLight extends IPSModule
     private const STATUS_ACTIVE = 102;
     private const STATUS_INACTIVE = 104;
     private const STATUS_HYPERHDR_OFFLINE = 201;
+    private const STATUS_WLED_OFFLINE = 202;
+    private const STATUS_MULTIPLE_OFFLINE = 203;
 
     public function Create(): void
     {
         parent::Create();
 
-        $this->RegisterPropertyBoolean('Active', true);
-        $this->RegisterPropertyInteger('UpdateInterval', 10);
-        $this->RegisterPropertyBoolean('DebugEnabled', false);
-
-        $this->RegisterPropertyBoolean('HyperHDREnabled', true);
-        $this->RegisterPropertyString('HyperHDRHost', '');
-        $this->RegisterPropertyInteger('HyperHDRPort', 8090);
-        $this->RegisterPropertyBoolean('HyperHDRHTTPS', false);
-        $this->RegisterPropertyString('HyperHDRPath', '/json-rpc');
-        $this->RegisterPropertyString('HyperHDRToken', '');
-
+        $this->registerProperties();
         $this->registerGeneralVariables();
         $this->registerHyperHDRVariables();
+        $this->registerWLEDVariables();
 
         $this->RegisterTimer(
             'UpdateTimer',
@@ -62,12 +59,15 @@ class MediaLight extends IPSModule
             $this->SetStatus(self::STATUS_INACTIVE);
             $this->SetValue('Online', false);
             $this->SetValue('Mode', 'INACTIVE');
-            $this->getStatusManager()->resetHyperHDR();
+            $this->SetValue('LastError', '');
+
+            $statusManager = $this->getStatusManager();
+            $statusManager->resetHyperHDR();
+            $statusManager->resetWLED();
 
             return;
         }
 
-        $this->SetStatus(self::STATUS_ACTIVE);
         $this->SetValue('Mode', 'READY');
         $this->SetValue('LastError', '');
 
@@ -80,39 +80,72 @@ class MediaLight extends IPSModule
             return;
         }
 
-        try {
-            if ($this->ReadPropertyBoolean('HyperHDREnabled')) {
+        $errors = [];
+
+        if ($this->ReadPropertyBoolean('HyperHDREnabled')) {
+            try {
                 $status = $this->getHyperHDRDriver()->readStatus();
                 $this->getStatusManager()->applyHyperHDR($status);
-            } else {
+            } catch (Throwable $exception) {
                 $this->getStatusManager()->resetHyperHDR();
-            }
+                $errors['HyperHDR'] = $exception->getMessage();
 
+                $this->logException(
+                    'HyperHDR-Aktualisierung fehlgeschlagen',
+                    $exception
+                );
+            }
+        } else {
+            $this->getStatusManager()->resetHyperHDR();
+        }
+
+        if ($this->ReadPropertyBoolean('WLEDEnabled')) {
+            try {
+                $controller = $this->getWLEDDriver()->readController();
+                $this->getStatusManager()->applyWLED($controller);
+            } catch (Throwable $exception) {
+                $this->getStatusManager()->resetWLED();
+                $errors['WLED'] = $exception->getMessage();
+
+                $this->logException(
+                    'WLED-Aktualisierung fehlgeschlagen',
+                    $exception
+                );
+            }
+        } else {
+            $this->getStatusManager()->resetWLED();
+        }
+
+        $this->SetValue(
+            'LastUpdate',
+            date('d.m.Y H:i:s')
+        );
+
+        if ($errors === []) {
             $this->SetValue('Online', true);
             $this->SetValue('Mode', 'READY');
-            $this->SetValue(
-                'LastUpdate',
-                date('d.m.Y H:i:s')
-            );
             $this->SetValue('LastError', '');
             $this->SetStatus(self::STATUS_ACTIVE);
-        } catch (Throwable $exception) {
-            $this->SetValue('Online', false);
-            $this->SetValue('Mode', 'ERROR');
-            $this->SetValue('LastError', $exception->getMessage());
+
+            return;
+        }
+
+        $this->SetValue('Online', false);
+        $this->SetValue('Mode', 'ERROR');
+        $this->SetValue(
+            'LastError',
+            $this->formatErrors($errors)
+        );
+
+        if (
+            array_key_exists('HyperHDR', $errors)
+            && array_key_exists('WLED', $errors)
+        ) {
+            $this->SetStatus(self::STATUS_MULTIPLE_OFFLINE);
+        } elseif (array_key_exists('HyperHDR', $errors)) {
             $this->SetStatus(self::STATUS_HYPERHDR_OFFLINE);
-
-            $this->getStatusManager()->resetHyperHDR();
-
-            $this->getLogger()->error(
-                'Aktualisierung fehlgeschlagen',
-                [
-                    'exception' => $exception::class,
-                    'message'   => $exception->getMessage(),
-                    'file'      => $exception->getFile(),
-                    'line'      => $exception->getLine()
-                ]
-            );
+        } else {
+            $this->SetStatus(self::STATUS_WLED_OFFLINE);
         }
     }
 
@@ -148,6 +181,23 @@ class MediaLight extends IPSModule
         }
     }
 
+    public function TestWLED(): void
+    {
+        try {
+            $controller = $this->getWLEDDriver()->readController();
+
+            $this->getStatusManager()->applyWLED($controller);
+
+            echo $this->buildWLEDTestResult($controller);
+        } catch (Throwable $exception) {
+            $this->getStatusManager()->resetWLED();
+            $this->SetValue('LastError', $exception->getMessage());
+
+            echo 'WLED-Test fehlgeschlagen: '
+                . $exception->getMessage();
+        }
+    }
+
     public function WriteDebug(
         string $sender,
         string $message,
@@ -172,6 +222,24 @@ class MediaLight extends IPSModule
         }
 
         $this->SetValue($ident, $value);
+    }
+
+    private function registerProperties(): void
+    {
+        $this->RegisterPropertyBoolean('Active', true);
+        $this->RegisterPropertyInteger('UpdateInterval', 10);
+        $this->RegisterPropertyBoolean('DebugEnabled', false);
+
+        $this->RegisterPropertyBoolean('HyperHDREnabled', true);
+        $this->RegisterPropertyString('HyperHDRHost', '');
+        $this->RegisterPropertyInteger('HyperHDRPort', 8090);
+        $this->RegisterPropertyBoolean('HyperHDRHTTPS', false);
+        $this->RegisterPropertyString('HyperHDRPath', '/json-rpc');
+        $this->RegisterPropertyString('HyperHDRToken', '');
+
+        $this->RegisterPropertyBoolean('WLEDEnabled', true);
+        $this->RegisterPropertyString('WLEDHost', '');
+        $this->RegisterPropertyBoolean('WLEDHTTPS', false);
     }
 
     private function registerGeneralVariables(): void
@@ -371,6 +439,166 @@ class MediaLight extends IPSModule
         );
     }
 
+    private function registerWLEDVariables(): void
+    {
+        $position = 500;
+
+        $definitions = [
+            ['bool', 'WLEDOnline', 'WLED online'],
+            ['string', 'WLEDName', 'WLED-Name'],
+            ['string', 'WLEDFirmware', 'WLED-Firmware'],
+            ['string', 'WLEDRelease', 'WLED-Release'],
+            ['string', 'WLEDArchitecture', 'WLED-Architektur'],
+            ['string', 'WLEDIPAddress', 'WLED-IP-Adresse'],
+            ['string', 'WLEDMACAddress', 'WLED-MAC-Adresse'],
+            ['int', 'WLEDLEDCount', 'WLED LED-Anzahl'],
+            ['int', 'WLEDBusCount', 'WLED Bus-Anzahl'],
+            ['bool', 'WLEDRGBW', 'WLED RGBW'],
+            ['int', 'WLEDMaximumCurrent', 'WLED Stromlimit'],
+            ['int', 'WLEDCurrentPower', 'WLED aktuelle Leistung'],
+            ['int', 'WLEDFPS', 'WLED FPS'],
+            ['int', 'WLEDEffectCount', 'WLED Effekte'],
+            ['int', 'WLEDPaletteCount', 'WLED Paletten'],
+            ['int', 'WLEDUptime', 'WLED Laufzeit'],
+            ['int', 'WLEDFreeHeap', 'WLED freier Speicher'],
+            ['int', 'WLEDRSSI', 'WLED RSSI'],
+            ['int', 'WLEDSignalQuality', 'WLED Signalqualität'],
+            ['string', 'WLEDLiveMode', 'WLED Live-Modus'],
+            ['string', 'WLEDLiveSourceIP', 'WLED Live-Quelle'],
+            ['bool', 'WLEDPower', 'WLED eingeschaltet'],
+            ['int', 'WLEDBrightness', 'WLED Helligkeit'],
+            ['bool', 'WLEDRealtime', 'WLED Realtime'],
+            ['int', 'WLEDRealtimeMode', 'WLED Realtime-Override'],
+            ['int', 'WLEDSegmentCount', 'WLED Segmente'],
+            ['bool', 'WLEDUDPSend', 'WLED UDP senden'],
+            ['bool', 'WLEDUDPReceive', 'WLED UDP empfangen']
+        ];
+
+        foreach ($definitions as [$type, $ident, $name]) {
+            $position += 10;
+
+            match ($type) {
+                'bool' => $this->RegisterVariableBoolean(
+                    $ident,
+                    $name,
+                    '~Switch',
+                    $position
+                ),
+                'int' => $this->RegisterVariableInteger(
+                    $ident,
+                    $name,
+                    '',
+                    $position
+                ),
+                default => $this->RegisterVariableString(
+                    $ident,
+                    $name,
+                    '',
+                    $position
+                )
+            };
+        }
+
+        for ($busNumber = 1; $busNumber <= 4; $busNumber++) {
+            $this->registerWLEDBusVariables(
+                $busNumber,
+                900 + ($busNumber * 200)
+            );
+        }
+    }
+
+    private function registerWLEDBusVariables(
+        int $busNumber,
+        int $position
+    ): void {
+        $prefix = 'WLEDBus' . $busNumber;
+        $caption = 'WLED Bus ' . $busNumber . ' ';
+
+        $this->RegisterVariableBoolean(
+            $prefix . 'Available',
+            $caption . 'verfügbar',
+            '~Switch',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            $prefix . 'Start',
+            $caption . 'Start',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            $prefix . 'Stop',
+            $caption . 'Ende',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            $prefix . 'Length',
+            $caption . 'LED-Anzahl',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            $prefix . 'GPIO',
+            $caption . 'GPIO',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            $prefix . 'Pins',
+            $caption . 'Pins',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            $prefix . 'Type',
+            $caption . 'LED-Typ',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            $prefix . 'ColorOrder',
+            $caption . 'Farbreihenfolge',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableBoolean(
+            $prefix . 'Reversed',
+            $caption . 'umgekehrt',
+            '~Switch',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            $prefix . 'Skip',
+            $caption . 'übersprungene LEDs',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            $prefix . 'MilliAmpsPerLED',
+            $caption . 'mA je LED',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableInteger(
+            $prefix . 'MaximumCurrent',
+            $caption . 'Stromlimit',
+            '',
+            $position += 10
+        );
+    }
+
     private function getStatusManager(): StatusManager
     {
         return new StatusManager(
@@ -388,14 +616,12 @@ class MediaLight extends IPSModule
     {
         $logger = $this->getLogger();
 
-        $httpClient = new HttpClient(
-            timeout: 5,
-            logger: $logger
-        );
-
         return new HyperHDRDriver(
             client: new HyperHDRClient(
-                httpClient: $httpClient,
+                httpClient: new HttpClient(
+                    timeout: 5,
+                    logger: $logger
+                ),
                 logger: $logger,
                 host: $this->ReadPropertyString('HyperHDRHost'),
                 port: $this->ReadPropertyInteger('HyperHDRPort'),
@@ -403,6 +629,25 @@ class MediaLight extends IPSModule
                 path: $this->ReadPropertyString('HyperHDRPath'),
                 token: $this->ReadPropertyString('HyperHDRToken')
             ),
+            logger: $logger
+        );
+    }
+
+    private function getWLEDDriver(): WLEDDriver
+    {
+        $logger = $this->getLogger();
+
+        return new WLEDDriver(
+            client: new WLEDClient(
+                httpClient: new HttpClient(
+                    timeout: 5,
+                    logger: $logger
+                ),
+                logger: $logger,
+                host: $this->ReadPropertyString('WLEDHost'),
+                https: $this->ReadPropertyBoolean('WLEDHTTPS')
+            ),
+            mapper: new WLEDMapper(),
             logger: $logger
         );
     }
@@ -438,5 +683,60 @@ class MediaLight extends IPSModule
                 'DebugEnabled'
             )
         );
+    }
+
+    /**
+     * @param array<string, string> $errors
+     */
+    private function formatErrors(array $errors): string
+    {
+        $parts = [];
+
+        foreach ($errors as $device => $message) {
+            $parts[] = $device . ': ' . $message;
+        }
+
+        return implode(' | ', $parts);
+    }
+
+    private function logException(
+        string $context,
+        Throwable $exception
+    ): void {
+        $this->getLogger()->error(
+            $context,
+            [
+                'exception' => $exception::class,
+                'message'   => $exception->getMessage(),
+                'file'      => $exception->getFile(),
+                'line'      => $exception->getLine()
+            ]
+        );
+    }
+
+    private function buildWLEDTestResult(
+        WLEDController $controller
+    ): string {
+        $lines = [
+            sprintf(
+                'WLED erreichbar: %s, Firmware %s, %d LEDs, %d Busse',
+                $controller->getName(),
+                $controller->getFirmware(),
+                $controller->getLedCount(),
+                $controller->getBusCount()
+            )
+        ];
+
+        foreach ($controller->getBuses() as $bus) {
+            $lines[] = sprintf(
+                'Bus %d: GPIO %d, Start %d, Länge %d',
+                $bus->getNumber(),
+                $bus->getPrimaryPin(),
+                $bus->getStart(),
+                $bus->getLength()
+            );
+        }
+
+        return implode(PHP_EOL, $lines);
     }
 }

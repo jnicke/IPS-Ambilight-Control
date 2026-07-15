@@ -63,6 +63,32 @@
                     "caption": "API-Token"
                 }
             ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "WLED / GL-C-618WL",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "WLEDEnabled",
+                    "caption": "WLED überwachen"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "WLEDHost",
+                    "caption": "Hostname oder IP-Adresse"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "WLEDHTTPS",
+                    "caption": "HTTPS verwenden"
+                },
+                {
+                    "type": "Label",
+                    "caption": "Die vier physischen Ausgänge werden automatisch aus der WLED-Buskonfiguration gelesen."
+                }
+            ]
         }
     ],
     "actions": [
@@ -75,6 +101,11 @@
             "type": "Button",
             "caption": "HyperHDR testen",
             "onClick": "AMBI_TestHyperHDR($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "WLED testen",
+            "onClick": "AMBI_TestWLED($id);"
         },
         {
             "type": "Button",
@@ -97,6 +128,16 @@
             "code": 201,
             "icon": "error",
             "caption": "HyperHDR nicht erreichbar"
+        },
+        {
+            "code": 202,
+            "icon": "error",
+            "caption": "WLED nicht erreichbar"
+        },
+        {
+            "code": 203,
+            "icon": "error",
+            "caption": "Mehrere Geräte nicht erreichbar"
         }
     ]
 }
