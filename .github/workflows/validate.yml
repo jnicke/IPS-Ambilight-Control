@@ -1,15 +1,86 @@
-name: Validate
-on: [push, pull_request]
+name: PHP and JSON validation
+
+on:
+  push:
+  pull_request:
+
 jobs:
   validate:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: PHP syntax
-        run: php -l AmbilightControl/module.php
-      - name: JSON syntax
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          coverage: none
+
+      - name: Validate PHP syntax
+        shell: bash
         run: |
-          python3 -m json.tool library.json >/dev/null
-          python3 -m json.tool AmbilightControl/module.json >/dev/null
-          python3 -m json.tool AmbilightControl/form.json >/dev/null
-          python3 -m json.tool AmbilightControl/locale.json >/dev/null
+          set -euo pipefail
+
+          while IFS= read -r -d '' file; do
+            echo "Checking PHP syntax: $file"
+            php -l "$file"
+          done < <(find MediaLight -type f -name '*.php' -print0)
+
+      - name: Validate JSON files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r -d '' file; do
+            echo "Checking JSON: $file"
+            php -r '
+              $file = $argv[1];
+              $content = file_get_contents($file);
+
+              if ($content === false) {
+                  fwrite(STDERR, "Cannot read JSON file: {$file}\n");
+                  exit(1);
+              }
+
+              json_decode($content, true);
+
+              if (json_last_error() !== JSON_ERROR_NONE) {
+                  fwrite(
+                      STDERR,
+                      "Invalid JSON in {$file}: "
+                      . json_last_error_msg()
+                      . "\n"
+                  );
+                  exit(1);
+              }
+            ' "$file"
+          done < <(
+            find . \
+              -type f \
+              -name '*.json' \
+              -not -path './.git/*' \
+              -print0
+          )
+
+      - name: Validate required module files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_files=(
+            "library.json"
+            "MediaLight/module.php"
+            "MediaLight/module.json"
+            "MediaLight/form.json"
+          )
+
+          for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+              echo "Required file missing: $file"
+              exit 1
+            fi
+
+            echo "Found required file: $file"
+          done
