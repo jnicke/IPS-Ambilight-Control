@@ -83,6 +83,7 @@ class MediaLight extends IPSModule
         }
 
         $this->SetStatus(self::STATUS_ACTIVE);
+
         $this->SetValue('Mode', 'INITIALIZING');
         $this->SetValue('Scene', '');
         $this->SetValue('LastError', '');
@@ -171,6 +172,24 @@ class MediaLight extends IPSModule
         }
     }
 
+    /**
+     * Öffentliche Brücke für externe Hilfsklassen.
+     *
+     * SendDebug() selbst ist in IPSModule protected und darf deshalb
+     * ausschließlich innerhalb der Modulklasse aufgerufen werden.
+     */
+    public function WriteDebug(
+        string $sender,
+        string $message,
+        int $format = 0
+    ): void {
+        $this->SendDebug(
+            $sender,
+            $message,
+            $format
+        );
+    }
+
     private function getConfig(): MediaLightConfig
     {
         return new MediaLightConfig(
@@ -183,7 +202,17 @@ class MediaLight extends IPSModule
     private function getLogger(): MediaLightLogger
     {
         return new MediaLightLogger(
-            $this,
+            function (
+                string $sender,
+                string $message,
+                int $format
+            ): void {
+                $this->WriteDebug(
+                    $sender,
+                    $message,
+                    $format
+                );
+            },
             $this->ReadPropertyBoolean('DebugEnabled')
         );
     }

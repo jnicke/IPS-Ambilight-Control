@@ -4,15 +4,21 @@ declare(strict_types=1);
 
 final class MediaLightLogger
 {
-    private IPSModule $module;
+    /**
+     * @var callable(string, string, int): void
+     */
+    private $debugWriter;
 
     private bool $debugEnabled;
 
+    /**
+     * @param callable(string, string, int): void $debugWriter
+     */
     public function __construct(
-        IPSModule $module,
+        callable $debugWriter,
         bool $debugEnabled
     ) {
-        $this->module = $module;
+        $this->debugWriter = $debugWriter;
         $this->debugEnabled = $debugEnabled;
     }
 
@@ -58,7 +64,7 @@ final class MediaLightLogger
     private function write(
         string $level,
         string $message,
-        $data
+        $data = null
     ): void {
         $payload = $message;
 
@@ -77,7 +83,7 @@ final class MediaLightLogger
             );
         }
 
-        $this->module->SendDebug(
+        ($this->debugWriter)(
             'MediaLight ' . $level,
             $payload,
             0
