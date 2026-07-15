@@ -4,36 +4,21 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/core/Autoloader.php';
 
-MediaLightAutoloader::register(
-    __DIR__ . '/core'
-);
+MediaLightAutoloader::register(__DIR__ . '/core');
 
 class MediaLight extends IPSModule
 {
     private const STATUS_ACTIVE = 102;
-
     private const STATUS_INACTIVE = 104;
-
     private const STATUS_ERROR = 200;
 
     public function Create(): void
     {
         parent::Create();
 
-        $this->RegisterPropertyBoolean(
-            'Active',
-            true
-        );
-
-        $this->RegisterPropertyInteger(
-            'UpdateInterval',
-            10
-        );
-
-        $this->RegisterPropertyBoolean(
-            'DebugEnabled',
-            false
-        );
+        $this->RegisterPropertyBoolean('Active', true);
+        $this->RegisterPropertyInteger('UpdateInterval', 10);
+        $this->RegisterPropertyBoolean('DebugEnabled', false);
 
         $this->RegisterVariableBoolean(
             'Online',
@@ -105,7 +90,7 @@ class MediaLight extends IPSModule
         $this->getLogger()->info(
             'MediaLight wurde initialisiert.',
             [
-                'instanceId'     => $this->InstanceID,
+                'instanceId' => $this->InstanceID,
                 'updateInterval' => $config->getUpdateInterval()
             ]
         );
@@ -153,12 +138,12 @@ class MediaLight extends IPSModule
             $config = $this->getConfig();
 
             $result = [
-                'instanceId'     => $this->InstanceID,
-                'active'         => $config->isActive(),
+                'instanceId' => $this->InstanceID,
+                'active' => $config->isActive(),
                 'updateInterval' => $config->getUpdateInterval(),
-                'debugEnabled'   => $config->isDebugEnabled(),
-                'phpVersion'     => PHP_VERSION,
-                'timestamp'      => time()
+                'debugEnabled' => $config->isDebugEnabled(),
+                'phpVersion' => PHP_VERSION,
+                'timestamp' => time()
             ];
 
             $logger->info(
