@@ -826,10 +826,10 @@ public function TestWLEDBus(int $busNumber): void
     }
 }
 
-public function RequestAction(
-    string $ident,
-    mixed $value
-): void {
+public function RequestAction($Ident, $Value)
+{
+    $ident = (string) $Ident;
+    $value = $Value;
     if (
         preg_match(
             '/^WLEDBus([2-4])(Power|Brightness|Color|White|Effect)$/',
