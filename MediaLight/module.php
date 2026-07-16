@@ -219,7 +219,7 @@ class MediaLight extends IPSModule
             );
         } catch (Throwable $exception) {
             $this->getStatusManager()->resetHyperHDR();
-            $this->SetValue('LastError', $exception->getMessage());
+            $this->SetValue('LastActionError', $exception->getMessage());
 
             echo 'HyperHDR-Test fehlgeschlagen: '
                 . $exception->getMessage();
@@ -236,7 +236,7 @@ class MediaLight extends IPSModule
             echo $this->buildWLEDTestResult($controller);
         } catch (Throwable $exception) {
             $this->getStatusManager()->resetWLED();
-            $this->SetValue('LastError', $exception->getMessage());
+            $this->SetValue('LastActionError', $exception->getMessage());
 
             echo 'WLED-Test fehlgeschlagen: '
                 . $exception->getMessage();
@@ -264,7 +264,7 @@ class MediaLight extends IPSModule
             );
         } catch (Throwable $exception) {
             $this->SetValue(
-                'LastError',
+                'LastActionError',
                 $exception->getMessage()
             );
 
@@ -311,7 +311,7 @@ class MediaLight extends IPSModule
             );
         } catch (Throwable $exception) {
             $this->SetValue(
-                'LastError',
+                'LastActionError',
                 $exception->getMessage()
             );
 
@@ -447,10 +447,10 @@ class MediaLight extends IPSModule
             $controller = $driver->readController();
             $this->getStatusManager()->applyWLED($controller);
 
-            $this->SetValue('LastError', '');
+            $this->SetValue('LastActionError', '');
         } catch (Throwable $exception) {
             $this->SetValue(
-                'LastError',
+                'LastActionError',
                 $exception->getMessage()
             );
 
@@ -502,10 +502,10 @@ class MediaLight extends IPSModule
         try {
             $this->applyAmbilightMode($mode);
 
-            $this->SetValue('LastError', '');
+            $this->SetValue('LastActionError', '');
         } catch (Throwable $exception) {
             $this->SetValue(
-                'LastError',
+                'LastActionError',
                 $exception->getMessage()
             );
 
@@ -818,10 +818,10 @@ class MediaLight extends IPSModule
             $status = $driver->readStatus();
             $this->getStatusManager()->applyHyperHDR($status);
 
-            $this->SetValue('LastError', '');
+            $this->SetValue('LastActionError', '');
         } catch (Throwable $exception) {
             $this->SetValue(
-                'LastError',
+                'LastActionError',
                 $exception->getMessage()
             );
 
@@ -909,6 +909,13 @@ class MediaLight extends IPSModule
             'Letzter Fehler',
             '',
             40
+        );
+
+        $this->RegisterVariableString(
+            'LastActionError',
+            'Letzter Aktionsfehler',
+            '',
+            45
         );
 
         $this->RegisterVariableInteger(
