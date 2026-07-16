@@ -104,7 +104,8 @@ final class HttpClient
             CURLOPT_CONNECTTIMEOUT => max(1, $this->timeout),
             CURLOPT_TIMEOUT        => max(1, $this->timeout),
             CURLOPT_CUSTOMREQUEST  => strtoupper($method),
-            CURLOPT_HTTPHEADER     => $headerLines
+            CURLOPT_HTTPHEADER     => $headerLines,
+            CURLOPT_IPRESOLVE      => CURL_IPRESOLVE_V4
         ];
 
         if ($payload !== null) {

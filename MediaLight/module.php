@@ -14,6 +14,7 @@ use MediaLight\Drivers\HyperHDR\Driver as HyperHDRDriver;
 use MediaLight\Drivers\WLED\Client as WLEDClient;
 use MediaLight\Drivers\WLED\Driver as WLEDDriver;
 use MediaLight\Drivers\WLED\Mapper as WLEDMapper;
+use MediaLight\Models\HyperHDR\Status as HyperHDRStatus;
 use MediaLight\Models\WLED\Controller as WLEDController;
 
 Autoloader::register(__DIR__ . '/src');
@@ -82,12 +83,16 @@ class MediaLight extends IPSModule
         }
 
         $errors = [];
+        $status = null;
+        $controller = null;
 
         if ($this->ReadPropertyBoolean('HyperHDREnabled')) {
             try {
                 $status = $this->getHyperHDRDriver()->readStatus();
                 $this->getStatusManager()->applyHyperHDR($status);
             } catch (Throwable $exception) {
+                $status = null;
+
                 $this->getStatusManager()->resetHyperHDR();
                 $errors['HyperHDR'] = $exception->getMessage();
 
@@ -105,6 +110,8 @@ class MediaLight extends IPSModule
                 $controller = $this->getWLEDDriver()->readController();
                 $this->getStatusManager()->applyWLED($controller);
             } catch (Throwable $exception) {
+                $controller = null;
+
                 $this->getStatusManager()->resetWLED();
                 $errors['WLED'] = $exception->getMessage();
 
@@ -116,6 +123,8 @@ class MediaLight extends IPSModule
         } else {
             $this->getStatusManager()->resetWLED();
         }
+
+        $this->updateLayoutConsistency($controller, $status);
 
         $this->SetValue(
             'LastUpdate',
@@ -196,6 +205,208 @@ class MediaLight extends IPSModule
 
             echo 'WLED-Test fehlgeschlagen: '
                 . $exception->getMessage();
+        }
+    }
+
+    public function SynchronizeWLEDSegments(): void
+    {
+        try {
+            $driver = $this->getWLEDDriver();
+            $driver->synchronizeSegments();
+
+            usleep(300000);
+
+            $controller = $driver->readController();
+            $this->getStatusManager()->applyWLED($controller);
+
+            $this->updateLayoutConsistency($controller, null);
+
+            echo sprintf(
+                'WLED-Segmente erfolgreich synchronisiert. '
+                . '%d Busse und %d Segmente erkannt.',
+                $controller->getBusCount(),
+                count($controller->getState()->getSegments())
+            );
+        } catch (Throwable $exception) {
+            $this->SetValue(
+                'LastError',
+                $exception->getMessage()
+            );
+
+            $this->logException(
+                'WLED-Segmentsynchronisierung fehlgeschlagen',
+                $exception
+            );
+
+            echo 'WLED-Segmentsynchronisierung fehlgeschlagen: '
+                . $exception->getMessage();
+        }
+    }
+
+    public function TestWLEDBus(int $busNumber): void
+    {
+        try {
+            $this->assertControllableBus($busNumber);
+
+            $driver = $this->getWLEDDriver();
+
+            $this->assertWLEDSegmentExists(
+                $driver,
+                $busNumber
+            );
+
+            $driver->setBusRgbw(
+                busNumber: $busNumber,
+                red: 255,
+                green: 120,
+                blue: 20,
+                white: 0,
+                brightness: 64,
+                transition: 7
+            );
+
+            usleep(200000);
+
+            $controller = $driver->readController();
+            $this->getStatusManager()->applyWLED($controller);
+
+            echo sprintf(
+                'WLED Bus %d wurde auf warmes Orange mit 25 %% Helligkeit gesetzt.',
+                $busNumber
+            );
+        } catch (Throwable $exception) {
+            $this->SetValue(
+                'LastError',
+                $exception->getMessage()
+            );
+
+            $this->logException(
+                sprintf(
+                    'Test von WLED Bus %d fehlgeschlagen',
+                    $busNumber
+                ),
+                $exception
+            );
+
+            echo sprintf(
+                'Test von WLED Bus %d fehlgeschlagen: %s',
+                $busNumber,
+                $exception->getMessage()
+            );
+        }
+    }
+
+    public function RequestAction($Ident, $Value)
+    {
+        $ident = (string) $Ident;
+        $value = $Value;
+
+        if (
+            preg_match(
+                '/^WLEDBus([2-4])(Power|Brightness|Color|White|Effect)$/',
+                $ident,
+                $matches
+            ) !== 1
+        ) {
+            throw new InvalidArgumentException(
+                'Unbekannte Aktion: ' . $ident
+            );
+        }
+
+        $busNumber = (int) $matches[1];
+        $property = (string) $matches[2];
+
+        try {
+            $driver = $this->getWLEDDriver();
+
+            $this->assertWLEDSegmentExists(
+                $driver,
+                $busNumber
+            );
+
+            switch ($property) {
+                case 'Power':
+                    $driver->setBusPower(
+                        busNumber: $busNumber,
+                        power: (bool) $value,
+                        transition: 7
+                    );
+                    break;
+
+                case 'Brightness':
+                    $driver->setBusBrightness(
+                        busNumber: $busNumber,
+                        brightness: (int) $value,
+                        transition: 7
+                    );
+                    break;
+
+                case 'Color':
+                    $this->setWLEDBusColor(
+                        driver: $driver,
+                        busNumber: $busNumber,
+                        color: (int) $value,
+                        white: $this->readIntegerValue(
+                            'WLEDBus' . $busNumber . 'White'
+                        ),
+                        brightness: $this->readIntegerValue(
+                            'WLEDBus' . $busNumber . 'Brightness'
+                        )
+                    );
+                    break;
+
+                case 'White':
+                    $this->setWLEDBusColor(
+                        driver: $driver,
+                        busNumber: $busNumber,
+                        color: $this->readIntegerValue(
+                            'WLEDBus' . $busNumber . 'Color'
+                        ),
+                        white: (int) $value,
+                        brightness: $this->readIntegerValue(
+                            'WLEDBus' . $busNumber . 'Brightness'
+                        )
+                    );
+                    break;
+
+                case 'Effect':
+                    $driver->setBusEffect(
+                        busNumber: $busNumber,
+                        effect: (int) $value,
+                        speed: 128,
+                        intensity: 128,
+                        palette: 0,
+                        brightness: max(
+                            1,
+                            $this->readIntegerValue(
+                                'WLEDBus'
+                                . $busNumber
+                                . 'Brightness'
+                            )
+                        ),
+                        transition: 7
+                    );
+                    break;
+            }
+
+            usleep(150000);
+
+            $controller = $driver->readController();
+            $this->getStatusManager()->applyWLED($controller);
+
+            $this->SetValue('LastError', '');
+        } catch (Throwable $exception) {
+            $this->SetValue(
+                'LastError',
+                $exception->getMessage()
+            );
+
+            $this->logException(
+                'WLED-Aktion fehlgeschlagen',
+                $exception
+            );
+
+            throw $exception;
         }
     }
 
@@ -472,7 +683,9 @@ class MediaLight extends IPSModule
             ['int', 'WLEDRealtimeMode', 'WLED Realtime-Override'],
             ['int', 'WLEDSegmentCount', 'WLED Segmente'],
             ['bool', 'WLEDUDPSend', 'WLED UDP senden'],
-            ['bool', 'WLEDUDPReceive', 'WLED UDP empfangen']
+            ['bool', 'WLEDUDPReceive', 'WLED UDP empfangen'],
+            ['bool', 'SegmentsInSync', 'WLED-Segmentlayout synchron'],
+            ['string', 'LayoutHint', 'Layout-Hinweise']
         ];
 
         foreach ($definitions as [$type, $ident, $name]) {
@@ -598,6 +811,214 @@ class MediaLight extends IPSModule
             '',
             $position += 10
         );
+    }
+
+    private function registerWLEDControlVariables(): void
+    {
+        for ($busNumber = 2; $busNumber <= 4; $busNumber++) {
+            $prefix = 'WLEDBus' . $busNumber;
+            $caption = 'WLED Bus ' . $busNumber . ' ';
+            $position = 2000 + ($busNumber * 100);
+
+            $this->RegisterVariableBoolean(
+                $prefix . 'Power',
+                $caption . 'Ein/Aus',
+                '~Switch',
+                $position += 10
+            );
+
+            $this->EnableAction(
+                $prefix . 'Power'
+            );
+
+            $this->RegisterVariableInteger(
+                $prefix . 'Brightness',
+                $caption . 'Helligkeit',
+                '~Intensity.255',
+                $position += 10
+            );
+
+            $this->EnableAction(
+                $prefix . 'Brightness'
+            );
+
+            $this->RegisterVariableInteger(
+                $prefix . 'Color',
+                $caption . 'Farbe',
+                '~HexColor',
+                $position += 10
+            );
+
+            $this->EnableAction(
+                $prefix . 'Color'
+            );
+
+            $this->RegisterVariableInteger(
+                $prefix . 'White',
+                $caption . 'Weißkanal',
+                '~Intensity.255',
+                $position += 10
+            );
+
+            $this->EnableAction(
+                $prefix . 'White'
+            );
+
+            $this->RegisterVariableInteger(
+                $prefix . 'Effect',
+                $caption . 'Effekt-ID',
+                '',
+                $position += 10
+            );
+
+            $this->EnableAction(
+                $prefix . 'Effect'
+            );
+        }
+    }
+
+    /**
+     * Prüft, ob das WLED-Segmentlayout zu den physischen Bussen passt
+     * und ob das HyperHDR-LED-Layout mit Bus 1 übereinstimmt.
+     *
+     * WLED ist dabei die Quelle der Wahrheit: Die Buskonfiguration wird
+     * ausschließlich aus dem Gerät gelesen, nie aus IP-Symcon vorgegeben.
+     */
+    private function updateLayoutConsistency(
+        ?WLEDController $controller,
+        ?HyperHDRStatus $status
+    ): void {
+        if ($controller === null) {
+            $this->SetValue('SegmentsInSync', false);
+            $this->SetValue('LayoutHint', '');
+
+            return;
+        }
+
+        $inSync = true;
+        $hints = [];
+
+        foreach ($controller->getBuses() as $bus) {
+            $segment = $controller
+                ->getState()
+                ->getSegment($bus->getIndex());
+
+            if (
+                $segment === null
+                || $segment->getStart() !== $bus->getStart()
+                || $segment->getStop() !== $bus->getStop()
+            ) {
+                $inSync = false;
+                $hints[] = sprintf(
+                    'Segment %d passt nicht zu Bus %d (%d–%d). '
+                    . 'Bitte Segmente synchronisieren.',
+                    $bus->getIndex(),
+                    $bus->getNumber(),
+                    $bus->getStart(),
+                    $bus->getStop()
+                );
+            }
+        }
+
+        if (
+            $status !== null
+            && $status->isOnline()
+            && $status->getLedCount() > 0
+        ) {
+            $busOne = null;
+
+            foreach ($controller->getBuses() as $bus) {
+                if ($bus->getNumber() === 1) {
+                    $busOne = $bus;
+
+                    break;
+                }
+            }
+
+            if (
+                $busOne !== null
+                && $status->getLedCount() !== $busOne->getLength()
+            ) {
+                $hints[] = sprintf(
+                    'HyperHDR-Layout (%d LEDs) weicht von '
+                    . 'Bus 1 (%d LEDs) ab.',
+                    $status->getLedCount(),
+                    $busOne->getLength()
+                );
+            }
+        }
+
+        $this->SetValue('SegmentsInSync', $inSync);
+        $this->SetValue('LayoutHint', implode(' ', $hints));
+    }
+
+    private function assertControllableBus(
+        int $busNumber
+    ): void {
+        if ($busNumber < 2 || $busNumber > 4) {
+            throw new InvalidArgumentException(
+                'Nur die WLED-Busse 2 bis 4 sind direkt steuerbar.'
+            );
+        }
+    }
+
+    private function assertWLEDSegmentExists(
+        WLEDDriver $driver,
+        int $busNumber
+    ): void {
+        $this->assertControllableBus($busNumber);
+
+        $controller = $driver->readController();
+        $segmentId = $busNumber - 1;
+
+        if (
+            $controller
+                ->getState()
+                ->getSegment($segmentId) === null
+        ) {
+            throw new RuntimeException(
+                sprintf(
+                    'Für WLED Bus %d existiert noch kein Segment. '
+                    . 'Bitte zuerst „WLED-Segmente mit '
+                    . 'Buskonfiguration synchronisieren“ ausführen.',
+                    $busNumber
+                )
+            );
+        }
+    }
+
+    private function setWLEDBusColor(
+        WLEDDriver $driver,
+        int $busNumber,
+        int $color,
+        int $white,
+        int $brightness
+    ): void {
+        $red = ($color >> 16) & 0xFF;
+        $green = ($color >> 8) & 0xFF;
+        $blue = $color & 0xFF;
+
+        $driver->setBusRgbw(
+            busNumber: $busNumber,
+            red: $red,
+            green: $green,
+            blue: $blue,
+            white: max(0, min(255, $white)),
+            brightness: max(1, min(255, $brightness)),
+            transition: 7
+        );
+    }
+
+    private function readIntegerValue(
+        string $ident
+    ): int {
+        $variableId = @$this->GetIDForIdent($ident);
+
+        if ($variableId <= 0) {
+            return 0;
+        }
+
+        return (int) GetValue($variableId);
     }
 
     private function getStatusManager(): StatusManager
@@ -740,334 +1161,4 @@ class MediaLight extends IPSModule
 
         return implode(PHP_EOL, $lines);
     }
-    public function SynchronizeWLEDSegments(): void
-{
-    try {
-        $driver = $this->getWLEDDriver();
-        $driver->synchronizeSegments();
-
-        usleep(300000);
-
-        $controller = $driver->readController();
-        $this->getStatusManager()->applyWLED($controller);
-
-        echo sprintf(
-            'WLED-Segmente erfolgreich synchronisiert. '
-            . '%d Busse und %d Segmente erkannt.',
-            $controller->getBusCount(),
-            count($controller->getState()->getSegments())
-        );
-    } catch (Throwable $exception) {
-        $this->SetValue(
-            'LastError',
-            $exception->getMessage()
-        );
-
-        $this->logException(
-            'WLED-Segmentsynchronisierung fehlgeschlagen',
-            $exception
-        );
-
-        echo 'WLED-Segmentsynchronisierung fehlgeschlagen: '
-            . $exception->getMessage();
-    }
-}
-
-public function TestWLEDBus(int $busNumber): void
-{
-    try {
-        $this->assertControllableBus($busNumber);
-
-        $driver = $this->getWLEDDriver();
-
-        $this->assertWLEDSegmentExists(
-            $driver,
-            $busNumber
-        );
-
-        $driver->setBusRgbw(
-            busNumber: $busNumber,
-            red: 255,
-            green: 120,
-            blue: 20,
-            white: 0,
-            brightness: 64,
-            transition: 7
-        );
-
-        usleep(200000);
-
-        $controller = $driver->readController();
-        $this->getStatusManager()->applyWLED($controller);
-
-        echo sprintf(
-            'WLED Bus %d wurde auf warmes Orange mit 25 %% Helligkeit gesetzt.',
-            $busNumber
-        );
-    } catch (Throwable $exception) {
-        $this->SetValue(
-            'LastError',
-            $exception->getMessage()
-        );
-
-        $this->logException(
-            sprintf(
-                'Test von WLED Bus %d fehlgeschlagen',
-                $busNumber
-            ),
-            $exception
-        );
-
-        echo sprintf(
-            'Test von WLED Bus %d fehlgeschlagen: %s',
-            $busNumber,
-            $exception->getMessage()
-        );
-    }
-}
-
-public function RequestAction($Ident, $Value)
-{
-    $ident = (string) $Ident;
-    $value = $Value;
-    if (
-        preg_match(
-            '/^WLEDBus([2-4])(Power|Brightness|Color|White|Effect)$/',
-            $ident,
-            $matches
-        ) !== 1
-    ) {
-        throw new InvalidArgumentException(
-            'Unbekannte Aktion: ' . $ident
-        );
-    }
-
-    $busNumber = (int) $matches[1];
-    $property = (string) $matches[2];
-
-    try {
-        $driver = $this->getWLEDDriver();
-
-        $this->assertWLEDSegmentExists(
-            $driver,
-            $busNumber
-        );
-
-        switch ($property) {
-            case 'Power':
-                $driver->setBusPower(
-                    busNumber: $busNumber,
-                    power: (bool) $value,
-                    transition: 7
-                );
-                break;
-
-            case 'Brightness':
-                $driver->setBusBrightness(
-                    busNumber: $busNumber,
-                    brightness: (int) $value,
-                    transition: 7
-                );
-                break;
-
-            case 'Color':
-                $this->setWLEDBusColor(
-                    driver: $driver,
-                    busNumber: $busNumber,
-                    color: (int) $value,
-                    white: $this->readIntegerValue(
-                        'WLEDBus' . $busNumber . 'White'
-                    ),
-                    brightness: $this->readIntegerValue(
-                        'WLEDBus' . $busNumber . 'Brightness'
-                    )
-                );
-                break;
-
-            case 'White':
-                $this->setWLEDBusColor(
-                    driver: $driver,
-                    busNumber: $busNumber,
-                    color: $this->readIntegerValue(
-                        'WLEDBus' . $busNumber . 'Color'
-                    ),
-                    white: (int) $value,
-                    brightness: $this->readIntegerValue(
-                        'WLEDBus' . $busNumber . 'Brightness'
-                    )
-                );
-                break;
-
-            case 'Effect':
-                $driver->setBusEffect(
-                    busNumber: $busNumber,
-                    effect: (int) $value,
-                    speed: 128,
-                    intensity: 128,
-                    palette: 0,
-                    brightness: max(
-                        1,
-                        $this->readIntegerValue(
-                            'WLEDBus'
-                            . $busNumber
-                            . 'Brightness'
-                        )
-                    ),
-                    transition: 7
-                );
-                break;
-        }
-
-        usleep(150000);
-
-        $controller = $driver->readController();
-        $this->getStatusManager()->applyWLED($controller);
-
-        $this->SetValue('LastError', '');
-    } catch (Throwable $exception) {
-        $this->SetValue(
-            'LastError',
-            $exception->getMessage()
-        );
-
-        $this->logException(
-            'WLED-Aktion fehlgeschlagen',
-            $exception
-        );
-
-        throw $exception;
-    }
-}
-private function registerWLEDControlVariables(): void
-{
-    for ($busNumber = 2; $busNumber <= 4; $busNumber++) {
-        $prefix = 'WLEDBus' . $busNumber;
-        $caption = 'WLED Bus ' . $busNumber . ' ';
-        $position = 2000 + ($busNumber * 100);
-
-        $this->RegisterVariableBoolean(
-            $prefix . 'Power',
-            $caption . 'Ein/Aus',
-            '~Switch',
-            $position += 10
-        );
-
-        $this->EnableAction(
-            $prefix . 'Power'
-        );
-
-        $this->RegisterVariableInteger(
-            $prefix . 'Brightness',
-            $caption . 'Helligkeit',
-            '~Intensity.255',
-            $position += 10
-        );
-
-        $this->EnableAction(
-            $prefix . 'Brightness'
-        );
-
-        $this->RegisterVariableInteger(
-            $prefix . 'Color',
-            $caption . 'Farbe',
-            '~HexColor',
-            $position += 10
-        );
-
-        $this->EnableAction(
-            $prefix . 'Color'
-        );
-
-        $this->RegisterVariableInteger(
-            $prefix . 'White',
-            $caption . 'Weißkanal',
-            '~Intensity.255',
-            $position += 10
-        );
-
-        $this->EnableAction(
-            $prefix . 'White'
-        );
-
-        $this->RegisterVariableInteger(
-            $prefix . 'Effect',
-            $caption . 'Effekt-ID',
-            '',
-            $position += 10
-        );
-
-        $this->EnableAction(
-            $prefix . 'Effect'
-        );
-    }
-}
-
-private function assertControllableBus(
-    int $busNumber
-): void {
-    if ($busNumber < 2 || $busNumber > 4) {
-        throw new InvalidArgumentException(
-            'Nur die WLED-Busse 2 bis 4 sind direkt steuerbar.'
-        );
-    }
-}
-
-private function assertWLEDSegmentExists(
-    WLEDDriver $driver,
-    int $busNumber
-): void {
-    $this->assertControllableBus($busNumber);
-
-    $controller = $driver->readController();
-    $segmentId = $busNumber - 1;
-
-    if (
-        $controller
-            ->getState()
-            ->getSegment($segmentId) === null
-    ) {
-        throw new RuntimeException(
-            sprintf(
-                'Für WLED Bus %d existiert noch kein Segment. '
-                . 'Bitte zuerst „WLED-Segmente mit '
-                . 'Buskonfiguration synchronisieren“ ausführen.',
-                $busNumber
-            )
-        );
-    }
-}
-
-private function setWLEDBusColor(
-    WLEDDriver $driver,
-    int $busNumber,
-    int $color,
-    int $white,
-    int $brightness
-): void {
-    $red = ($color >> 16) & 0xFF;
-    $green = ($color >> 8) & 0xFF;
-    $blue = $color & 0xFF;
-
-    $driver->setBusRgbw(
-        busNumber: $busNumber,
-        red: $red,
-        green: $green,
-        blue: $blue,
-        white: max(0, min(255, $white)),
-        brightness: max(1, min(255, $brightness)),
-        transition: 7
-    );
-}
-
-private function readIntegerValue(
-    string $ident
-): int {
-    $variableId = @$this->GetIDForIdent($ident);
-
-    if ($variableId <= 0) {
-        return 0;
-    }
-
-    return (int) GetValue($variableId);
-}
 }
