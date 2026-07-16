@@ -27,15 +27,45 @@ class MediaLight extends IPSModule
     private const STATUS_WLED_OFFLINE = 202;
     private const STATUS_MULTIPLE_OFFLINE = 203;
 
+    private const MODE_OFF = 0;
+    private const MODE_LIVE = 1;
+    private const MODE_WARM_WHITE = 2;
+    private const MODE_NIGHT = 3;
+    private const MODE_CLEANING = 4;
+    private const MODE_FIREPLACE = 5;
+    private const MODE_RAINBOW = 6;
+
+    private const WARM_WHITE_RGBW = [255, 160, 60, 200];
+    private const WARM_WHITE_BRIGHTNESS = 153;
+    private const NIGHT_BRIGHTNESS = 15;
+    private const CLEANING_RGBW = [255, 255, 255, 255];
+
+    /**
+     * WLED-Effekt- und Paletten-IDs (Stand WLED 0.14/0.15,
+     * bei Firmware-Wechsel ggf. anpassen).
+     */
+    private const FX_SOLID = 0;
+    private const FX_RAINBOW = 9;
+    private const FX_FIRE_2012 = 66;
+    private const PALETTE_DEFAULT = 0;
+    private const PALETTE_FIRE = 35;
+
     public function Create(): void
     {
         parent::Create();
+
+        $this->registerAmbilightModeProfile();
 
         $this->registerProperties();
         $this->registerGeneralVariables();
         $this->registerHyperHDRVariables();
         $this->registerWLEDVariables();
         $this->registerWLEDControlVariables();
+
+        $this->RegisterAttributeInteger(
+            'PreviousAmbilightMode',
+            self::MODE_OFF
+        );
 
         $this->RegisterTimer(
             'UpdateTimer',
@@ -301,6 +331,12 @@ class MediaLight extends IPSModule
         $ident = (string) $Ident;
         $value = $Value;
 
+        if ($ident === 'AmbilightMode') {
+            $this->handleAmbilightModeAction((int) $value);
+
+            return;
+        }
+
         if (
             $ident === 'HyperHDRLEDDeviceEnabled'
             || $ident === 'HyperHDRGrabberEnabled'
@@ -422,6 +458,280 @@ class MediaLight extends IPSModule
         }
     }
 
+    private function registerAmbilightModeProfile(): void
+    {
+        $profile = 'AMBI.Mode';
+
+        if (!IPS_VariableProfileExists($profile)) {
+            IPS_CreateVariableProfile(
+                $profile,
+                VARIABLETYPE_INTEGER
+            );
+        }
+
+        IPS_SetVariableProfileValues($profile, 0, 6, 1);
+
+        $associations = [
+            [self::MODE_OFF, 'Aus', 'Power', -1],
+            [self::MODE_LIVE, 'Live', 'TV', 0x2196F3],
+            [self::MODE_WARM_WHITE, 'Warmweiß', 'Bulb', 0xFFC107],
+            [self::MODE_NIGHT, 'Nacht', 'Moon', 0x3F51B5],
+            [self::MODE_CLEANING, 'Reinigung', 'Drops', 0x00BCD4],
+            [self::MODE_FIREPLACE, 'Kaminfeuer', 'Flame', 0xFF5722],
+            [self::MODE_RAINBOW, 'Regenbogen', 'Paintbrush', 0x9C27B0]
+        ];
+
+        foreach ($associations as [$value, $caption, $icon, $color]) {
+            IPS_SetVariableProfileAssociation(
+                $profile,
+                $value,
+                $caption,
+                $icon,
+                $color
+            );
+        }
+    }
+
+    private function handleAmbilightModeAction(int $mode): void
+    {
+        try {
+            $this->applyAmbilightMode($mode);
+
+            $this->SetValue('LastError', '');
+        } catch (Throwable $exception) {
+            $this->SetValue(
+                'LastError',
+                $exception->getMessage()
+            );
+
+            $this->logException(
+                sprintf(
+                    'Ambilight-Modus %d konnte nicht aktiviert werden',
+                    $mode
+                ),
+                $exception
+            );
+
+            throw $exception;
+        }
+    }
+
+    private function applyAmbilightMode(int $mode): void
+    {
+        $previousMode = $this->ReadAttributeInteger(
+            'PreviousAmbilightMode'
+        );
+
+        $hyperHDR = $this->getHyperHDRDriver();
+        $wled = $this->getWLEDDriver();
+
+        switch ($mode) {
+            case self::MODE_LIVE:
+                $hyperHDR->setComponentState(
+                    component: 'VIDEOGRABBER',
+                    enabled: true
+                );
+
+                usleep(300000);
+
+                $hyperHDR->setComponentState(
+                    component: 'LEDDEVICE',
+                    enabled: true
+                );
+                break;
+
+            case self::MODE_OFF:
+                $hyperHDR->setComponentState(
+                    component: 'VIDEOGRABBER',
+                    enabled: false
+                );
+
+                $this->waitForWLEDRealtimeEnd($wled);
+
+                $wled->setBusPower(
+                    busNumber: 1,
+                    power: false
+                );
+                break;
+
+            case self::MODE_WARM_WHITE:
+            case self::MODE_NIGHT:
+                $hyperHDR->setComponentState(
+                    component: 'VIDEOGRABBER',
+                    enabled: false
+                );
+
+                $this->waitForWLEDRealtimeEnd($wled);
+
+                [$red, $green, $blue, $white] = self::WARM_WHITE_RGBW;
+
+                $wled->setBusRgbw(
+                    busNumber: 1,
+                    red: $red,
+                    green: $green,
+                    blue: $blue,
+                    white: $white,
+                    brightness: $mode === self::MODE_NIGHT
+                        ? self::NIGHT_BRIGHTNESS
+                        : self::WARM_WHITE_BRIGHTNESS
+                );
+                break;
+
+            case self::MODE_CLEANING:
+                $hyperHDR->setComponentState(
+                    component: 'VIDEOGRABBER',
+                    enabled: false
+                );
+
+                $this->waitForWLEDRealtimeEnd($wled);
+
+                $controller = $wled->readController();
+                $transaction = $wled->beginTransaction();
+
+                [$red, $green, $blue, $white] = self::CLEANING_RGBW;
+
+                for (
+                    $busNumber = 1;
+                    $busNumber <= $controller->getBusCount();
+                    $busNumber++
+                ) {
+                    $transaction
+                        ->bus($busNumber)
+                        ->power(true)
+                        ->brightness(255)
+                        ->rgbw($red, $green, $blue, $white)
+                        ->effect(self::FX_SOLID);
+                }
+
+                $transaction->commit(transition: 7);
+                break;
+
+            case self::MODE_FIREPLACE:
+                $hyperHDR->setComponentState(
+                    component: 'VIDEOGRABBER',
+                    enabled: false
+                );
+
+                $this->waitForWLEDRealtimeEnd($wled);
+
+                $wled->setBusEffect(
+                    busNumber: 1,
+                    effect: self::FX_FIRE_2012,
+                    speed: 120,
+                    intensity: 128,
+                    palette: self::PALETTE_FIRE,
+                    brightness: 140
+                );
+                break;
+
+            case self::MODE_RAINBOW:
+                $hyperHDR->setComponentState(
+                    component: 'VIDEOGRABBER',
+                    enabled: false
+                );
+
+                $this->waitForWLEDRealtimeEnd($wled);
+
+                $wled->setBusEffect(
+                    busNumber: 1,
+                    effect: self::FX_RAINBOW,
+                    speed: 60,
+                    intensity: 128,
+                    palette: self::PALETTE_DEFAULT,
+                    brightness: 128
+                );
+                break;
+
+            default:
+                throw new InvalidArgumentException(
+                    'Unbekannter Ambilight-Modus: ' . $mode
+                );
+        }
+
+        if (
+            $previousMode === self::MODE_CLEANING
+            && $mode !== self::MODE_CLEANING
+        ) {
+            $this->restoreControlledBuses($wled);
+        }
+
+        $this->WriteAttributeInteger(
+            'PreviousAmbilightMode',
+            $mode
+        );
+
+        $this->SetValue('AmbilightMode', $mode);
+
+        usleep(300000);
+
+        $controller = $wled->readController();
+        $this->getStatusManager()->applyWLED($controller);
+
+        $status = $hyperHDR->readStatus();
+        $this->getStatusManager()->applyHyperHDR($status);
+    }
+
+    private function waitForWLEDRealtimeEnd(
+        WLEDDriver $driver,
+        int $timeoutSeconds = 6
+    ): bool {
+        $deadline = microtime(true) + $timeoutSeconds;
+
+        do {
+            $controller = $driver->readController();
+
+            if (!$controller->getState()->isRealtime()) {
+                return true;
+            }
+
+            usleep(500000);
+        } while (microtime(true) < $deadline);
+
+        $this->getLogger()->warning(
+            'WLED hat den Realtime-Modus nicht rechtzeitig verlassen',
+            ['timeoutSeconds' => $timeoutSeconds]
+        );
+
+        return false;
+    }
+
+    private function restoreControlledBuses(
+        WLEDDriver $driver
+    ): void {
+        for ($busNumber = 2; $busNumber <= 4; $busNumber++) {
+            $powerId = @$this->GetIDForIdent(
+                'WLEDBus' . $busNumber . 'Power'
+            );
+
+            if ($powerId <= 0) {
+                continue;
+            }
+
+            if (!(bool) GetValue($powerId)) {
+                $driver->setBusPower(
+                    busNumber: $busNumber,
+                    power: false
+                );
+
+                continue;
+            }
+
+            $this->setWLEDBusColor(
+                driver: $driver,
+                busNumber: $busNumber,
+                color: $this->readIntegerValue(
+                    'WLEDBus' . $busNumber . 'Color'
+                ),
+                white: $this->readIntegerValue(
+                    'WLEDBus' . $busNumber . 'White'
+                ),
+                brightness: $this->readIntegerValue(
+                    'WLEDBus' . $busNumber . 'Brightness'
+                )
+            );
+        }
+    }
+
     private function handleHyperHDRComponentAction(
         string $ident,
         bool $enabled
@@ -538,6 +848,17 @@ class MediaLight extends IPSModule
             'Letzter Fehler',
             '',
             40
+        );
+
+        $this->RegisterVariableInteger(
+            'AmbilightMode',
+            'Ambilight-Modus',
+            'AMBI.Mode',
+            50
+        );
+
+        $this->EnableAction(
+            'AmbilightMode'
         );
     }
 
