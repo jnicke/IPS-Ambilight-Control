@@ -4,16 +4,67 @@ declare(strict_types=1);
 
 namespace MediaLight\Drivers\HyperHDR;
 
+use InvalidArgumentException;
 use JsonException;
 use MediaLight\Core\Logger;
 use MediaLight\Models\HyperHDR\Status;
 
 final class Driver
 {
+    private const CONTROLLABLE_COMPONENTS = [
+        'ALL',
+        'LEDDEVICE',
+        'VIDEOGRABBER',
+        'SYSTEMGRABBER',
+        'SMOOTHING',
+        'HDR',
+        'BLACKBORDER',
+        'FORWARDER'
+    ];
+
     public function __construct(
         private readonly Client $client,
         private readonly Logger $logger
     ) {
+    }
+
+    /**
+     * Schaltet eine HyperHDR-Komponente ein oder aus.
+     */
+    public function setComponentState(
+        string $component,
+        bool $enabled
+    ): void {
+        $normalized = strtoupper(trim($component));
+
+        if (
+            !in_array(
+                $normalized,
+                self::CONTROLLABLE_COMPONENTS,
+                true
+            )
+        ) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Unbekannte HyperHDR-Komponente "%s". Erlaubt sind: %s',
+                    $component,
+                    implode(', ', self::CONTROLLABLE_COMPONENTS)
+                )
+            );
+        }
+
+        $this->client->setComponentState(
+            $normalized,
+            $enabled
+        );
+
+        $this->logger->info(
+            'HyperHDR-Komponente geschaltet',
+            [
+                'component' => $normalized,
+                'enabled'   => $enabled
+            ]
+        );
     }
 
     public function readStatus(): Status

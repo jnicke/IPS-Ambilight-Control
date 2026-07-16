@@ -302,6 +302,18 @@ class MediaLight extends IPSModule
         $value = $Value;
 
         if (
+            $ident === 'HyperHDRLEDDeviceEnabled'
+            || $ident === 'HyperHDRGrabberEnabled'
+        ) {
+            $this->handleHyperHDRComponentAction(
+                $ident,
+                (bool) $value
+            );
+
+            return;
+        }
+
+        if (
             preg_match(
                 '/^WLEDBus([2-4])(Power|Brightness|Color|White|Effect)$/',
                 $ident,
@@ -403,6 +415,50 @@ class MediaLight extends IPSModule
 
             $this->logException(
                 'WLED-Aktion fehlgeschlagen',
+                $exception
+            );
+
+            throw $exception;
+        }
+    }
+
+    private function handleHyperHDRComponentAction(
+        string $ident,
+        bool $enabled
+    ): void {
+        $component = match ($ident) {
+            'HyperHDRLEDDeviceEnabled' => 'LEDDEVICE',
+            'HyperHDRGrabberEnabled'   => 'VIDEOGRABBER',
+            default => throw new InvalidArgumentException(
+                'Unbekannte HyperHDR-Aktion: ' . $ident
+            )
+        };
+
+        try {
+            $driver = $this->getHyperHDRDriver();
+
+            $driver->setComponentState(
+                component: $component,
+                enabled: $enabled
+            );
+
+            usleep(200000);
+
+            $status = $driver->readStatus();
+            $this->getStatusManager()->applyHyperHDR($status);
+
+            $this->SetValue('LastError', '');
+        } catch (Throwable $exception) {
+            $this->SetValue(
+                'LastError',
+                $exception->getMessage()
+            );
+
+            $this->logException(
+                sprintf(
+                    'HyperHDR-Komponente %s konnte nicht geschaltet werden',
+                    $component
+                ),
                 $exception
             );
 
@@ -538,6 +594,10 @@ class MediaLight extends IPSModule
             $position += 10
         );
 
+        $this->EnableAction(
+            'HyperHDRGrabberEnabled'
+        );
+
         $this->RegisterVariableString(
             'HyperHDRGrabberDevice',
             'Grabber-Gerät',
@@ -557,6 +617,10 @@ class MediaLight extends IPSModule
             'LED-Gerät aktiv',
             '~Switch',
             $position += 10
+        );
+
+        $this->EnableAction(
+            'HyperHDRLEDDeviceEnabled'
         );
 
         $this->RegisterVariableBoolean(

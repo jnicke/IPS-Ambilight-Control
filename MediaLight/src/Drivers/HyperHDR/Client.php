@@ -32,7 +32,27 @@ final class Client
     }
 
     /**
-     * Diese Methode liest ausschließlich Daten.
+     * Schaltet eine HyperHDR-Komponente ein oder aus.
+     *
+     * @return array<string, mixed>
+     */
+    public function setComponentState(
+        string $component,
+        bool $state
+    ): array {
+        return $this->request(
+            'componentstate',
+            [
+                'componentstate' => [
+                    'component' => $component,
+                    'state'     => $state
+                ]
+            ]
+        );
+    }
+
+    /**
+     * Führt einen beliebigen JSON-RPC-Befehl aus.
      *
      * @param array<string, mixed> $parameters
      *
