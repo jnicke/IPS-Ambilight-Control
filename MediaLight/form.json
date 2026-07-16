@@ -118,7 +118,158 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "Die Automatik (Variable Apple-TV-Automatik) schaltet: playing → Live, paused → Warmweiß, standby → Aus. Bei Bridge-Ausfall wird der letzte Modus gehalten."
+                    "caption": "Die Automatik (Variable Apple-TV-Automatik) wendet die App-Regeln unten an. Ohne Regeln gilt: playing → Live, paused → Warmweiß, standby → Aus. Bei Bridge-Ausfall wird der letzte Modus gehalten."
+                },
+                {
+                    "type": "List",
+                    "name": "AppleTVAppRules",
+                    "caption": "App-Regeln",
+                    "rowCount": 6,
+                    "add": true,
+                    "delete": true,
+                    "columns": [
+                        {
+                            "caption": "App-ID (leer = Standardregel)",
+                            "name": "AppId",
+                            "width": "300px",
+                            "add": "",
+                            "edit": {
+                                "type": "ValidationTextBox"
+                            }
+                        },
+                        {
+                            "caption": "Bei Wiedergabe",
+                            "name": "PlayingMode",
+                            "width": "170px",
+                            "add": 1,
+                            "edit": {
+                                "type": "Select",
+                                "options": [
+                                    {
+                                        "caption": "keine Änderung",
+                                        "value": -1
+                                    },
+                                    {
+                                        "caption": "Aus",
+                                        "value": 0
+                                    },
+                                    {
+                                        "caption": "Live",
+                                        "value": 1
+                                    },
+                                    {
+                                        "caption": "Warmweiß",
+                                        "value": 2
+                                    },
+                                    {
+                                        "caption": "Nacht",
+                                        "value": 3
+                                    },
+                                    {
+                                        "caption": "Kaminfeuer",
+                                        "value": 5
+                                    },
+                                    {
+                                        "caption": "Regenbogen",
+                                        "value": 6
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "caption": "Bei Pause",
+                            "name": "PausedMode",
+                            "width": "170px",
+                            "add": 2,
+                            "edit": {
+                                "type": "Select",
+                                "options": [
+                                    {
+                                        "caption": "keine Änderung",
+                                        "value": -1
+                                    },
+                                    {
+                                        "caption": "Aus",
+                                        "value": 0
+                                    },
+                                    {
+                                        "caption": "Live",
+                                        "value": 1
+                                    },
+                                    {
+                                        "caption": "Warmweiß",
+                                        "value": 2
+                                    },
+                                    {
+                                        "caption": "Nacht",
+                                        "value": 3
+                                    },
+                                    {
+                                        "caption": "Kaminfeuer",
+                                        "value": 5
+                                    },
+                                    {
+                                        "caption": "Regenbogen",
+                                        "value": 6
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "caption": "Busse 2–4",
+                            "name": "BusScene",
+                            "width": "180px",
+                            "add": 0,
+                            "edit": {
+                                "type": "Select",
+                                "options": [
+                                    {
+                                        "caption": "unverändert",
+                                        "value": 0
+                                    },
+                                    {
+                                        "caption": "aus",
+                                        "value": 1
+                                    },
+                                    {
+                                        "caption": "warmweiß gedimmt",
+                                        "value": 2
+                                    },
+                                    {
+                                        "caption": "neutralweiß",
+                                        "value": 3
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "Select",
+                    "name": "AppleTVStandbyBusScene",
+                    "caption": "Bus-Szene bei Standby (TV aus)",
+                    "options": [
+                        {
+                            "caption": "unverändert",
+                            "value": 0
+                        },
+                        {
+                            "caption": "aus",
+                            "value": 1
+                        },
+                        {
+                            "caption": "warmweiß gedimmt",
+                            "value": 2
+                        },
+                        {
+                            "caption": "neutralweiß",
+                            "value": 3
+                        }
+                    ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "Die App-ID der gerade laufenden App zeigt die Statusvariable Apple TV App bzw. der /status-Endpunkt der Bridge (Feld app_id)."
                 }
             ]
         }

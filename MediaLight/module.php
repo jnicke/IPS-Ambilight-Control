@@ -56,6 +56,17 @@ class MediaLight extends IPSModule
     private const PALETTE_DEFAULT = 0;
     private const PALETTE_FIRE = 35;
 
+    private const APP_MODE_NO_CHANGE = -1;
+
+    private const BUS_SCENE_UNCHANGED = 0;
+    private const BUS_SCENE_OFF = 1;
+    private const BUS_SCENE_WARM_DIMMED = 2;
+    private const BUS_SCENE_NEUTRAL_WHITE = 3;
+
+    private const BUS_SCENE_WARM_BRIGHTNESS = 60;
+    private const BUS_SCENE_NEUTRAL_RGBW = [255, 220, 180, 255];
+    private const BUS_SCENE_NEUTRAL_BRIGHTNESS = 200;
+
     public function Create(): void
     {
         parent::Create();
@@ -81,6 +92,11 @@ class MediaLight extends IPSModule
 
         $this->RegisterAttributeString(
             'LastAppleTVState',
+            ''
+        );
+
+        $this->RegisterAttributeString(
+            'LastAppleTVAppId',
             ''
         );
 
@@ -1043,12 +1059,12 @@ class MediaLight extends IPSModule
     }
 
     /**
-     * Schaltet den Ambilight-Modus abhängig vom Apple-TV-Zustand.
+     * Wendet die App-Regeln abhängig vom Apple-TV-Zustand an.
      *
-     * Reagiert ausschließlich auf Zustandswechsel, damit manuell
-     * gewählte Modi nicht bei jedem Ereignis übersteuert werden.
-     * Bei Bridge-Ausfall (online = false) wird der letzte Modus
-     * bewusst gehalten.
+     * Reagiert ausschließlich auf Wechsel von Zustand oder App, damit
+     * manuell gewählte Modi nicht bei jedem Ereignis übersteuert
+     * werden. Bei Bridge-Ausfall (online = false) wird der letzte
+     * Modus bewusst gehalten.
      */
     private function applyAppleTVAutomation(
         AppleTVStatus $status
@@ -1062,39 +1078,120 @@ class MediaLight extends IPSModule
         }
 
         $state = $status->getState();
-        $lastState = $this->ReadAttributeString('LastAppleTVState');
+        $appId = $status->getAppId();
 
-        if ($state === $lastState) {
+        $lastState = $this->ReadAttributeString('LastAppleTVState');
+        $lastAppId = $this->ReadAttributeString('LastAppleTVAppId');
+
+        if ($state === $lastState && $appId === $lastAppId) {
             return;
         }
 
         $this->WriteAttributeString('LastAppleTVState', $state);
+        $this->WriteAttributeString('LastAppleTVAppId', $appId);
 
-        $targetMode = match ($state) {
-            'playing' => self::MODE_LIVE,
-            'paused'  => self::MODE_WARM_WHITE,
-            'standby' => self::MODE_OFF,
-            default   => null
-        };
+        if ($state === 'standby') {
+            $this->runAppleTVScene(
+                targetMode: self::MODE_OFF,
+                busScene: $this->ReadPropertyInteger(
+                    'AppleTVStandbyBusScene'
+                ),
+                state: $state,
+                appId: $appId
+            );
 
-        if ($targetMode === null) {
             return;
         }
 
-        if ((int) $this->GetValue('AmbilightMode') === $targetMode) {
+        if ($state !== 'playing' && $state !== 'paused') {
             return;
         }
 
+        $rule = $this->findAppleTVAppRule($appId);
+
+        $targetMode = (int) (
+            $state === 'playing'
+                ? ($rule['PlayingMode'] ?? self::APP_MODE_NO_CHANGE)
+                : ($rule['PausedMode'] ?? self::APP_MODE_NO_CHANGE)
+        );
+
+        $this->runAppleTVScene(
+            targetMode: $targetMode,
+            busScene: (int) ($rule['BusScene'] ?? self::BUS_SCENE_UNCHANGED),
+            state: $state,
+            appId: $appId
+        );
+    }
+
+    /**
+     * Sucht die passende App-Regel: exakter Treffer auf die App-ID
+     * vor einer Fallback-Regel (leere App-ID). Ohne konfigurierte
+     * Regeln gilt das bisherige Standardverhalten.
+     *
+     * @return array<string, mixed>
+     */
+    private function findAppleTVAppRule(string $appId): array
+    {
+        $rules = json_decode(
+            $this->ReadPropertyString('AppleTVAppRules'),
+            true
+        );
+
+        $fallback = null;
+
+        if (is_array($rules)) {
+            foreach ($rules as $rule) {
+                if (!is_array($rule)) {
+                    continue;
+                }
+
+                $ruleAppId = trim((string) ($rule['AppId'] ?? ''));
+
+                if (
+                    $ruleAppId !== ''
+                    && strcasecmp($ruleAppId, $appId) === 0
+                ) {
+                    return $rule;
+                }
+
+                if ($ruleAppId === '' && $fallback === null) {
+                    $fallback = $rule;
+                }
+            }
+        }
+
+        return $fallback ?? [
+            'PlayingMode' => self::MODE_LIVE,
+            'PausedMode'  => self::MODE_WARM_WHITE,
+            'BusScene'    => self::BUS_SCENE_UNCHANGED
+        ];
+    }
+
+    private function runAppleTVScene(
+        int $targetMode,
+        int $busScene,
+        string $state,
+        string $appId
+    ): void {
         $this->getLogger()->info(
-            'Apple-TV-Automatik schaltet Ambilight-Modus',
+            'Apple-TV-Automatik wendet Szene an',
             [
                 'state'      => $state,
-                'targetMode' => $targetMode
+                'appId'      => $appId,
+                'targetMode' => $targetMode,
+                'busScene'   => $busScene
             ]
         );
 
         try {
-            $this->applyAmbilightMode($targetMode);
+            if (
+                $targetMode !== self::APP_MODE_NO_CHANGE
+                && (int) $this->GetValue('AmbilightMode') !== $targetMode
+            ) {
+                $this->applyAmbilightMode($targetMode);
+            }
+
+            $this->applyBusScene($busScene);
 
             $this->SetValue('LastActionError', '');
         } catch (Throwable $exception) {
@@ -1108,6 +1205,56 @@ class MediaLight extends IPSModule
                 $exception
             );
         }
+    }
+
+    private function applyBusScene(int $busScene): void
+    {
+        if ($busScene === self::BUS_SCENE_UNCHANGED) {
+            return;
+        }
+
+        $driver = $this->getWLEDDriver();
+        $transaction = $driver->beginTransaction();
+
+        for ($busNumber = 2; $busNumber <= 4; $busNumber++) {
+            $update = $transaction->bus($busNumber);
+
+            switch ($busScene) {
+                case self::BUS_SCENE_OFF:
+                    $update->power(false);
+                    break;
+
+                case self::BUS_SCENE_WARM_DIMMED:
+                    [$red, $green, $blue, $white] = self::WARM_WHITE_RGBW;
+
+                    $update
+                        ->power(true)
+                        ->brightness(self::BUS_SCENE_WARM_BRIGHTNESS)
+                        ->rgbw($red, $green, $blue, $white)
+                        ->effect(self::FX_SOLID);
+                    break;
+
+                case self::BUS_SCENE_NEUTRAL_WHITE:
+                    [$red, $green, $blue, $white] = self::BUS_SCENE_NEUTRAL_RGBW;
+
+                    $update
+                        ->power(true)
+                        ->brightness(self::BUS_SCENE_NEUTRAL_BRIGHTNESS)
+                        ->rgbw($red, $green, $blue, $white)
+                        ->effect(self::FX_SOLID);
+                    break;
+
+                default:
+                    throw new InvalidArgumentException(
+                        'Unbekannte Bus-Szene: ' . $busScene
+                    );
+            }
+        }
+
+        $transaction->commit(
+            transition: 7,
+            forceControllerOn: $busScene !== self::BUS_SCENE_OFF
+        );
     }
 
     private function getAppleTVDriver(): AppleTVDriver
@@ -1218,6 +1365,8 @@ class MediaLight extends IPSModule
         $this->RegisterPropertyBoolean('AppleTVEnabled', false);
         $this->RegisterPropertyString('AppleTVHost', '');
         $this->RegisterPropertyInteger('AppleTVPort', 8091);
+        $this->RegisterPropertyString('AppleTVAppRules', '[]');
+        $this->RegisterPropertyInteger('AppleTVStandbyBusScene', 0);
     }
 
     private function registerGeneralVariables(): void
