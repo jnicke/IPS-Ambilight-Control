@@ -9,11 +9,14 @@ use MediaLight\Core\Config;
 use MediaLight\Core\HttpClient;
 use MediaLight\Core\Logger;
 use MediaLight\Core\StatusManager;
+use MediaLight\Drivers\AppleTV\Client as AppleTVClient;
+use MediaLight\Drivers\AppleTV\Driver as AppleTVDriver;
 use MediaLight\Drivers\HyperHDR\Client as HyperHDRClient;
 use MediaLight\Drivers\HyperHDR\Driver as HyperHDRDriver;
 use MediaLight\Drivers\WLED\Client as WLEDClient;
 use MediaLight\Drivers\WLED\Driver as WLEDDriver;
 use MediaLight\Drivers\WLED\Mapper as WLEDMapper;
+use MediaLight\Models\AppleTV\Status as AppleTVStatus;
 use MediaLight\Models\HyperHDR\Status as HyperHDRStatus;
 use MediaLight\Models\WLED\Controller as WLEDController;
 
@@ -26,6 +29,9 @@ class MediaLight extends IPSModule
     private const STATUS_HYPERHDR_OFFLINE = 201;
     private const STATUS_WLED_OFFLINE = 202;
     private const STATUS_MULTIPLE_OFFLINE = 203;
+    private const STATUS_APPLETV_OFFLINE = 204;
+
+    private const WEBHOOK_PATH = '/hook/medialight';
 
     private const MODE_OFF = 0;
     private const MODE_LIVE = 1;
@@ -61,6 +67,7 @@ class MediaLight extends IPSModule
         $this->registerHyperHDRVariables();
         $this->registerWLEDVariables();
         $this->registerWLEDControlVariables();
+        $this->registerAppleTVVariables();
 
         $this->RegisterAttributeInteger(
             'PreviousAmbilightMode',
@@ -72,6 +79,13 @@ class MediaLight extends IPSModule
             ''
         );
 
+        $this->RegisterAttributeString(
+            'LastAppleTVState',
+            ''
+        );
+
+        $this->RegisterMessage(0, IPS_KERNELSTARTED);
+
         $this->RegisterTimer(
             'UpdateTimer',
             0,
@@ -82,6 +96,10 @@ class MediaLight extends IPSModule
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
+
+        if (IPS_GetKernelRunlevel() === KR_READY) {
+            $this->registerHook(self::WEBHOOK_PATH);
+        }
 
         $config = $this->getConfig();
 
@@ -161,6 +179,23 @@ class MediaLight extends IPSModule
 
         $this->updateLayoutConsistency($controller, $status);
 
+        if ($this->ReadPropertyBoolean('AppleTVEnabled')) {
+            try {
+                $appleTV = $this->getAppleTVDriver()->readStatus();
+
+                $this->applyAppleTVStatus($appleTV);
+                $this->applyAppleTVAutomation($appleTV);
+            } catch (Throwable $exception) {
+                $this->resetAppleTVStatus();
+                $errors['AppleTV'] = $exception->getMessage();
+
+                $this->logException(
+                    'Apple-TV-Aktualisierung fehlgeschlagen',
+                    $exception
+                );
+            }
+        }
+
         $this->SetValue(
             'LastUpdate',
             date('d.m.Y H:i:s')
@@ -182,15 +217,25 @@ class MediaLight extends IPSModule
             $this->formatErrors($errors)
         );
 
-        if (
-            array_key_exists('HyperHDR', $errors)
-            && array_key_exists('WLED', $errors)
-        ) {
+        if (count($errors) >= 2) {
             $this->SetStatus(self::STATUS_MULTIPLE_OFFLINE);
         } elseif (array_key_exists('HyperHDR', $errors)) {
             $this->SetStatus(self::STATUS_HYPERHDR_OFFLINE);
-        } else {
+        } elseif (array_key_exists('WLED', $errors)) {
             $this->SetStatus(self::STATUS_WLED_OFFLINE);
+        } else {
+            $this->SetStatus(self::STATUS_APPLETV_OFFLINE);
+        }
+    }
+
+    public function MessageSink(
+        $TimeStamp,
+        $SenderID,
+        $Message,
+        $Data
+    ): void {
+        if ($Message === IPS_KERNELSTARTED) {
+            $this->registerHook(self::WEBHOOK_PATH);
         }
     }
 
@@ -239,6 +284,35 @@ class MediaLight extends IPSModule
             $this->SetValue('LastActionError', $exception->getMessage());
 
             echo 'WLED-Test fehlgeschlagen: '
+                . $exception->getMessage();
+        }
+    }
+
+    public function TestAppleTV(): void
+    {
+        try {
+            $status = $this->getAppleTVDriver()->readStatus();
+
+            $this->applyAppleTVStatus($status);
+
+            echo sprintf(
+                'Apple-TV-Bridge erreichbar. Apple TV %s, Status: %s, App: %s',
+                $status->isOnline() ? 'online' : 'offline',
+                $status->getState() !== ''
+                    ? $status->getState()
+                    : 'unbekannt',
+                $status->getApp() !== ''
+                    ? $status->getApp()
+                    : 'keine'
+            );
+        } catch (Throwable $exception) {
+            $this->resetAppleTVStatus();
+            $this->SetValue(
+                'LastActionError',
+                $exception->getMessage()
+            );
+
+            echo 'Apple-TV-Test fehlgeschlagen: '
                 . $exception->getMessage();
         }
     }
@@ -338,6 +412,12 @@ class MediaLight extends IPSModule
 
         if ($ident === 'AmbilightMode') {
             $this->handleAmbilightModeAction((int) $value);
+
+            return;
+        }
+
+        if ($ident === 'AppleTVAutomation') {
+            $this->SetValue('AppleTVAutomation', (bool) $value);
 
             return;
         }
@@ -793,6 +873,261 @@ class MediaLight extends IPSModule
         $this->WriteAttributeString('CleaningSnapshot', '');
     }
 
+    private function registerAppleTVVariables(): void
+    {
+        $position = 3000;
+
+        $this->RegisterVariableBoolean(
+            'AppleTVOnline',
+            'Apple TV online',
+            '~Switch',
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'AppleTVPower',
+            'Apple TV Betriebszustand',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'AppleTVState',
+            'Apple TV Wiedergabestatus',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'AppleTVApp',
+            'Apple TV App',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'AppleTVTitle',
+            'Apple TV Titel',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableString(
+            'AppleTVLastEvent',
+            'Apple TV letztes Ereignis',
+            '',
+            $position += 10
+        );
+
+        $this->RegisterVariableBoolean(
+            'AppleTVAutomation',
+            'Apple-TV-Automatik',
+            '~Switch',
+            $position += 10
+        );
+
+        $this->EnableAction(
+            'AppleTVAutomation'
+        );
+    }
+
+    private function registerHook(string $hook): void
+    {
+        $webhookInstances = IPS_GetInstanceListByModuleID(
+            '{015A6EB8-D6E5-4B93-B496-0D3F77AE9FE1}'
+        );
+
+        if ($webhookInstances === []) {
+            return;
+        }
+
+        $webhookId = $webhookInstances[0];
+
+        $hooks = json_decode(
+            IPS_GetProperty($webhookId, 'Hooks'),
+            true
+        );
+
+        if (!is_array($hooks)) {
+            $hooks = [];
+        }
+
+        foreach ($hooks as $index => $entry) {
+            if (($entry['Hook'] ?? '') !== $hook) {
+                continue;
+            }
+
+            if ((int) ($entry['TargetID'] ?? 0) === $this->InstanceID) {
+                return;
+            }
+
+            $hooks[$index]['TargetID'] = $this->InstanceID;
+
+            IPS_SetProperty(
+                $webhookId,
+                'Hooks',
+                json_encode($hooks)
+            );
+            IPS_ApplyChanges($webhookId);
+
+            return;
+        }
+
+        $hooks[] = [
+            'Hook'     => $hook,
+            'TargetID' => $this->InstanceID
+        ];
+
+        IPS_SetProperty(
+            $webhookId,
+            'Hooks',
+            json_encode($hooks)
+        );
+        IPS_ApplyChanges($webhookId);
+    }
+
+    protected function ProcessHookData(): void
+    {
+        $body = file_get_contents('php://input');
+
+        $payload = json_decode((string) $body, true);
+
+        if (!is_array($payload)) {
+            http_response_code(400);
+
+            echo json_encode(['result' => 'invalid payload']);
+
+            return;
+        }
+
+        try {
+            $status = $this->getAppleTVDriver()->mapStatus($payload);
+
+            $this->applyAppleTVStatus($status);
+            $this->applyAppleTVAutomation($status);
+
+            echo json_encode(['result' => 'ok']);
+        } catch (Throwable $exception) {
+            $this->logException(
+                'Apple-TV-Ereignis konnte nicht verarbeitet werden',
+                $exception
+            );
+
+            http_response_code(500);
+
+            echo json_encode(['result' => 'error']);
+        }
+    }
+
+    private function applyAppleTVStatus(
+        AppleTVStatus $status
+    ): void {
+        $this->SetValue('AppleTVOnline', $status->isOnline());
+        $this->SetValue('AppleTVPower', $status->getPower());
+        $this->SetValue('AppleTVState', $status->getState());
+        $this->SetValue('AppleTVApp', $status->getApp());
+        $this->SetValue('AppleTVTitle', $status->getTitle());
+        $this->SetValue(
+            'AppleTVLastEvent',
+            $status->getLastEvent() > 0
+                ? date('d.m.Y H:i:s', $status->getLastEvent())
+                : ''
+        );
+    }
+
+    private function resetAppleTVStatus(): void
+    {
+        $this->SetValue('AppleTVOnline', false);
+        $this->SetValue('AppleTVPower', 'unknown');
+        $this->SetValue('AppleTVState', 'offline');
+    }
+
+    /**
+     * Schaltet den Ambilight-Modus abhängig vom Apple-TV-Zustand.
+     *
+     * Reagiert ausschließlich auf Zustandswechsel, damit manuell
+     * gewählte Modi nicht bei jedem Ereignis übersteuert werden.
+     * Bei Bridge-Ausfall (online = false) wird der letzte Modus
+     * bewusst gehalten.
+     */
+    private function applyAppleTVAutomation(
+        AppleTVStatus $status
+    ): void {
+        if (!(bool) $this->GetValue('AppleTVAutomation')) {
+            return;
+        }
+
+        if (!$status->isOnline()) {
+            return;
+        }
+
+        $state = $status->getState();
+        $lastState = $this->ReadAttributeString('LastAppleTVState');
+
+        if ($state === $lastState) {
+            return;
+        }
+
+        $this->WriteAttributeString('LastAppleTVState', $state);
+
+        $targetMode = match ($state) {
+            'playing' => self::MODE_LIVE,
+            'paused'  => self::MODE_WARM_WHITE,
+            'standby' => self::MODE_OFF,
+            default   => null
+        };
+
+        if ($targetMode === null) {
+            return;
+        }
+
+        if ((int) $this->GetValue('AmbilightMode') === $targetMode) {
+            return;
+        }
+
+        $this->getLogger()->info(
+            'Apple-TV-Automatik schaltet Ambilight-Modus',
+            [
+                'state'      => $state,
+                'targetMode' => $targetMode
+            ]
+        );
+
+        try {
+            $this->applyAmbilightMode($targetMode);
+
+            $this->SetValue('LastActionError', '');
+        } catch (Throwable $exception) {
+            $this->SetValue(
+                'LastActionError',
+                $exception->getMessage()
+            );
+
+            $this->logException(
+                'Apple-TV-Automatik fehlgeschlagen',
+                $exception
+            );
+        }
+    }
+
+    private function getAppleTVDriver(): AppleTVDriver
+    {
+        $logger = $this->getLogger();
+
+        return new AppleTVDriver(
+            client: new AppleTVClient(
+                httpClient: new HttpClient(
+                    timeout: 5,
+                    logger: $logger
+                ),
+                logger: $logger,
+                host: $this->ReadPropertyString('AppleTVHost'),
+                port: $this->ReadPropertyInteger('AppleTVPort')
+            ),
+            logger: $logger
+        );
+    }
+
     private function handleHyperHDRComponentAction(
         string $ident,
         bool $enabled
@@ -879,6 +1214,10 @@ class MediaLight extends IPSModule
         $this->RegisterPropertyBoolean('WLEDEnabled', true);
         $this->RegisterPropertyString('WLEDHost', '');
         $this->RegisterPropertyBoolean('WLEDHTTPS', false);
+
+        $this->RegisterPropertyBoolean('AppleTVEnabled', false);
+        $this->RegisterPropertyString('AppleTVHost', '');
+        $this->RegisterPropertyInteger('AppleTVPort', 8091);
     }
 
     private function registerGeneralVariables(): void

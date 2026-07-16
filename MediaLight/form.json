@@ -89,6 +89,38 @@
                     "caption": "Bus 1 ist für HyperHDR reserviert. Die Busse 2 bis 4 werden als getrennte WLED-Segmente gesteuert."
                 }
             ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Apple TV",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "AppleTVEnabled",
+                    "caption": "Apple-TV-Bridge überwachen"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "AppleTVHost",
+                    "caption": "Bridge-Hostname oder IP-Adresse"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "AppleTVPort",
+                    "caption": "Bridge-Port",
+                    "minimum": 1,
+                    "maximum": 65535
+                },
+                {
+                    "type": "Label",
+                    "caption": "Ereignisse empfängt das Modul per WebHook unter /hook/medialight. In der config.json der Bridge muss dafür webhook_url auf http://<IP-Symcon-IP>:3777/hook/medialight zeigen."
+                },
+                {
+                    "type": "Label",
+                    "caption": "Die Automatik (Variable Apple-TV-Automatik) schaltet: playing → Live, paused → Warmweiß, standby → Aus. Bei Bridge-Ausfall wird der letzte Modus gehalten."
+                }
+            ]
         }
     ],
     "actions": [
@@ -106,6 +138,11 @@
             "type": "Button",
             "caption": "WLED testen",
             "onClick": "AMBI_TestWLED($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "Apple TV testen",
+            "onClick": "AMBI_TestAppleTV($id);"
         },
         {
             "type": "Button",
@@ -158,6 +195,11 @@
             "code": 203,
             "icon": "error",
             "caption": "Mehrere Geräte nicht erreichbar"
+        },
+        {
+            "code": 204,
+            "icon": "error",
+            "caption": "Apple-TV-Bridge nicht erreichbar"
         }
     ]
 }
