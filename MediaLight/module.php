@@ -986,7 +986,7 @@ class MediaLight extends IPSModule
         IPS_ApplyChanges($webhookId);
     }
 
-    protected function ProcessHookData(): void
+    protected function ProcessHookData()
     {
         $body = file_get_contents('php://input');
 
