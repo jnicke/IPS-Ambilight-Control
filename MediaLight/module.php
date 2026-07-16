@@ -67,6 +67,11 @@ class MediaLight extends IPSModule
             self::MODE_OFF
         );
 
+        $this->RegisterAttributeString(
+            'CleaningSnapshot',
+            ''
+        );
+
         $this->RegisterTimer(
             'UpdateTimer',
             0,
@@ -593,6 +598,9 @@ class MediaLight extends IPSModule
                 $this->waitForWLEDRealtimeEnd($wled);
 
                 $controller = $wled->readController();
+
+                $this->captureCleaningSnapshot($controller);
+
                 $transaction = $wled->beginTransaction();
 
                 [$red, $green, $blue, $white] = self::CLEANING_RGBW;
@@ -695,57 +703,94 @@ class MediaLight extends IPSModule
         return false;
     }
 
+    /**
+     * Sichert den Zustand der Segmente von Bus 2–4, bevor der
+     * Reinigungsmodus sie mit Vollweiß übersteuert. Die Steuervariablen
+     * taugen dafür nicht als Quelle, weil der StatusManager sie laufend
+     * mit dem Ist-Zustand synchronisiert.
+     */
+    private function captureCleaningSnapshot(
+        WLEDController $controller
+    ): void {
+        $snapshot = [];
+
+        foreach (
+            $controller->getState()->getSegments() as $segment
+        ) {
+            $segmentId = $segment->getId();
+
+            if ($segmentId === 0) {
+                continue;
+            }
+
+            $snapshot[$segmentId] = [
+                'on'  => $segment->isOn(),
+                'bri' => $segment->getBrightness(),
+                'col' => $segment->getPrimaryColor(),
+                'fx'  => $segment->getEffect()
+            ];
+        }
+
+        $this->WriteAttributeString(
+            'CleaningSnapshot',
+            json_encode($snapshot)
+        );
+    }
+
     private function restoreControlledBuses(
         WLEDDriver $driver
     ): void {
+        $raw = $this->ReadAttributeString('CleaningSnapshot');
+        $snapshot = json_decode($raw, true);
+
+        if (!is_array($snapshot) || $snapshot === []) {
+            return;
+        }
+
         $transaction = $driver->beginTransaction();
         $hasChanges = false;
 
-        for ($busNumber = 2; $busNumber <= 4; $busNumber++) {
-            $powerId = @$this->GetIDForIdent(
-                'WLEDBus' . $busNumber . 'Power'
-            );
+        foreach ($snapshot as $segmentId => $state) {
+            $busNumber = (int) $segmentId + 1;
 
-            if ($powerId <= 0) {
+            if ($busNumber < 2 || $busNumber > 4) {
                 continue;
             }
 
             $update = $transaction->bus($busNumber);
             $hasChanges = true;
 
-            if (!(bool) GetValue($powerId)) {
+            if (!(bool) ($state['on'] ?? true)) {
                 $update->power(false);
 
                 continue;
             }
 
-            $color = $this->readIntegerValue(
-                'WLEDBus' . $busNumber . 'Color'
-            );
-
-            $white = $this->readIntegerValue(
-                'WLEDBus' . $busNumber . 'White'
-            );
-
-            $brightness = $this->readIntegerValue(
-                'WLEDBus' . $busNumber . 'Brightness'
-            );
+            $color = is_array($state['col'] ?? null)
+                ? $state['col']
+                : [0, 0, 0, 0];
 
             $update
                 ->power(true)
-                ->brightness(max(1, min(255, $brightness)))
-                ->rgbw(
-                    ($color >> 16) & 0xFF,
-                    ($color >> 8) & 0xFF,
-                    $color & 0xFF,
-                    max(0, min(255, $white))
+                ->brightness(
+                    max(1, min(255, (int) ($state['bri'] ?? 255)))
                 )
-                ->effect(self::FX_SOLID);
+                ->rgbw(
+                    (int) ($color[0] ?? 0),
+                    (int) ($color[1] ?? 0),
+                    (int) ($color[2] ?? 0),
+                    (int) ($color[3] ?? 0)
+                )
+                ->effect(
+                    (int) ($state['fx'] ?? self::FX_SOLID)
+                );
         }
 
         if ($hasChanges) {
             $transaction->commit(transition: 7);
         }
+
+        $this->WriteAttributeString('CleaningSnapshot', '');
     }
 
     private function handleHyperHDRComponentAction(
