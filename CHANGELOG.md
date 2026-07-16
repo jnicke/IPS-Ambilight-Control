@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.0
+
+- Apple-TV-Integration über die mitgelieferte pyatv-Bridge:
+  Statusvariablen für Online, Betriebszustand, Wiedergabestatus,
+  App, Titel und letztes Ereignis
+- Ereignisempfang per WebHook `/hook/medialight`: Zustandswechsel
+  des Apple TV erreichen IP-Symcon in unter einer Sekunde;
+  zyklischer Bridge-Abruf dient als Fallback
+- Apple-TV-Automatik (schaltbar): playing → Live, paused → Warmweiß,
+  standby → Aus; reagiert nur auf Zustandswechsel und hält bei
+  Bridge-Ausfall den letzten Modus
+- Neuer Instanzstatus 204 „Apple-TV-Bridge nicht erreichbar“,
+  Statuslogik auf beliebige Gerätekombinationen erweitert
+- Bridge (`app.py`): stdin-Endlosschleife unter systemd behoben
+  (offene stdin-Pipe für `atvscript push_updates`) und
+  WebHook-Push bei Änderungen von online/power/state/app ergänzt
+- Konfigurationsformular um Apple-TV-Bereich und Testschaltfläche
+  erweitert
+
 ## 0.3.1
 
 - Neue Statusvariable `LastActionError`: Fehler aus Benutzeraktionen
