@@ -9,6 +9,9 @@ use RuntimeException;
 
 final class HttpClient
 {
+    private const BUSY_RETRY_ATTEMPTS = 3;
+    private const BUSY_RETRY_DELAY_MICROSECONDS = 300000;
+
     public function __construct(
         private readonly int $timeout = 5,
         private readonly ?Logger $logger = null
@@ -144,21 +147,46 @@ final class HttpClient
             ]
         );
 
-        $response = curl_exec($curl);
+        $response = false;
+        $statusCode = 0;
+        $attempt = 0;
 
-        if ($response === false) {
-            $error = curl_error($curl);
-            curl_close($curl);
+        do {
+            $attempt++;
 
-            throw new RuntimeException(
-                'HTTP-Anfrage fehlgeschlagen: ' . $error
+            $response = curl_exec($curl);
+
+            if ($response === false) {
+                $error = curl_error($curl);
+                curl_close($curl);
+
+                throw new RuntimeException(
+                    'HTTP-Anfrage fehlgeschlagen: ' . $error
+                );
+            }
+
+            $statusCode = (int) curl_getinfo(
+                $curl,
+                CURLINFO_HTTP_CODE
             );
-        }
 
-        $statusCode = (int) curl_getinfo(
-            $curl,
-            CURLINFO_HTTP_CODE
-        );
+            if (
+                $statusCode !== 503
+                || $attempt >= self::BUSY_RETRY_ATTEMPTS
+            ) {
+                break;
+            }
+
+            $this->logger?->debug(
+                'HTTP 503 (busy), Anfrage wird wiederholt',
+                [
+                    'attempt' => $attempt,
+                    'url'     => $url
+                ]
+            );
+
+            usleep(self::BUSY_RETRY_DELAY_MICROSECONDS);
+        } while (true);
 
         curl_close($curl);
 

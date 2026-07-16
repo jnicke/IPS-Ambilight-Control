@@ -525,6 +525,13 @@ class MediaLight extends IPSModule
         $hyperHDR = $this->getHyperHDRDriver();
         $wled = $this->getWLEDDriver();
 
+        if (
+            $previousMode === self::MODE_CLEANING
+            && $mode !== self::MODE_CLEANING
+        ) {
+            $this->restoreControlledBuses($wled);
+        }
+
         switch ($mode) {
             case self::MODE_LIVE:
                 $hyperHDR->setComponentState(
@@ -648,13 +655,6 @@ class MediaLight extends IPSModule
                 );
         }
 
-        if (
-            $previousMode === self::MODE_CLEANING
-            && $mode !== self::MODE_CLEANING
-        ) {
-            $this->restoreControlledBuses($wled);
-        }
-
         $this->WriteAttributeInteger(
             'PreviousAmbilightMode',
             $mode
@@ -698,6 +698,9 @@ class MediaLight extends IPSModule
     private function restoreControlledBuses(
         WLEDDriver $driver
     ): void {
+        $transaction = $driver->beginTransaction();
+        $hasChanges = false;
+
         for ($busNumber = 2; $busNumber <= 4; $busNumber++) {
             $powerId = @$this->GetIDForIdent(
                 'WLEDBus' . $busNumber . 'Power'
@@ -707,28 +710,41 @@ class MediaLight extends IPSModule
                 continue;
             }
 
+            $update = $transaction->bus($busNumber);
+            $hasChanges = true;
+
             if (!(bool) GetValue($powerId)) {
-                $driver->setBusPower(
-                    busNumber: $busNumber,
-                    power: false
-                );
+                $update->power(false);
 
                 continue;
             }
 
-            $this->setWLEDBusColor(
-                driver: $driver,
-                busNumber: $busNumber,
-                color: $this->readIntegerValue(
-                    'WLEDBus' . $busNumber . 'Color'
-                ),
-                white: $this->readIntegerValue(
-                    'WLEDBus' . $busNumber . 'White'
-                ),
-                brightness: $this->readIntegerValue(
-                    'WLEDBus' . $busNumber . 'Brightness'
-                )
+            $color = $this->readIntegerValue(
+                'WLEDBus' . $busNumber . 'Color'
             );
+
+            $white = $this->readIntegerValue(
+                'WLEDBus' . $busNumber . 'White'
+            );
+
+            $brightness = $this->readIntegerValue(
+                'WLEDBus' . $busNumber . 'Brightness'
+            );
+
+            $update
+                ->power(true)
+                ->brightness(max(1, min(255, $brightness)))
+                ->rgbw(
+                    ($color >> 16) & 0xFF,
+                    ($color >> 8) & 0xFF,
+                    $color & 0xFF,
+                    max(0, min(255, $white))
+                )
+                ->effect(self::FX_SOLID);
+        }
+
+        if ($hasChanges) {
+            $transaction->commit(transition: 7);
         }
     }
 
