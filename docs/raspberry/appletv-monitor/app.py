@@ -275,6 +275,26 @@ class AppleTVMonitor:
         if app_id is not None:
             updates["app_id"] = str(app_id)
 
+        # Bei einem App-Wechsel veraltete Metadaten der vorherigen App
+        # zurücksetzen, sofern das Ereignis keine neuen Werte liefert.
+        # Ohne diesen Schritt bliebe z. B. der Titel der alten App stehen.
+        new_app_id = updates.get("app_id")
+
+        if (
+            new_app_id is not None
+            and new_app_id != self.status["app_id"]
+        ):
+            for key, default in (
+                ("title", ""),
+                ("artist", ""),
+                ("album", ""),
+                ("genre", ""),
+                ("media_type", "Unknown"),
+                ("position", 0.0),
+                ("total_time", 0.0)
+            ):
+                updates.setdefault(key, default)
+
         position = self.first_value(
             event,
             "position",
@@ -348,23 +368,27 @@ class AppleTVMonitor:
         # ("Press ENTER to abort"). Unter systemd wäre stdin /dev/null und
         # damit sofort EOF. Deshalb bekommt der Prozess eine offene Pipe,
         # in die nie geschrieben wird.
-        self.process = await asyncio.create_subprocess_exec(
+        process = await asyncio.create_subprocess_exec(
             *command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
 
-        if self.process.stdout is None or self.process.stderr is None:
+        # Lokale Referenz verwenden: stop_process() setzt self.process
+        # beim Herunterfahren parallel auf None.
+        self.process = process
+
+        if process.stdout is None or process.stderr is None:
             raise RuntimeError("atvscript konnte nicht gestartet werden")
 
         stderr_task = asyncio.create_task(
-            self.read_stderr(self.process.stderr)
+            self.read_stderr(process.stderr)
         )
 
         try:
             while not self.stopping:
-                line = await self.process.stdout.readline()
+                line = await process.stdout.readline()
 
                 if not line:
                     break
@@ -388,7 +412,7 @@ class AppleTVMonitor:
                 if isinstance(event, dict):
                     self.process_event(event)
 
-            return_code = await self.process.wait()
+            return_code = await process.wait()
 
             if not self.stopping:
                 self.set_status(
