@@ -451,6 +451,15 @@ class MediaLight extends IPSModule
         }
 
         if (
+            $ident === 'WLEDPower'
+            || $ident === 'WLEDBrightness'
+        ) {
+            $this->handleWLEDMasterAction($ident, $value);
+
+            return;
+        }
+
+        if (
             preg_match(
                 '/^WLEDBus([2-4])(Power|Brightness|Color|White|Effect)$/',
                 $ident,
@@ -536,6 +545,46 @@ class MediaLight extends IPSModule
                         transition: 7
                     );
                     break;
+            }
+
+            usleep(150000);
+
+            $controller = $driver->readController();
+            $this->getStatusManager()->applyWLED($controller);
+
+            $this->SetValue('LastActionError', '');
+        } catch (Throwable $exception) {
+            $this->SetValue(
+                'LastActionError',
+                $exception->getMessage()
+            );
+
+            $this->logException(
+                'WLED-Aktion fehlgeschlagen',
+                $exception
+            );
+
+            throw $exception;
+        }
+    }
+
+    private function handleWLEDMasterAction(
+        string $ident,
+        $value
+    ): void {
+        try {
+            $driver = $this->getWLEDDriver();
+
+            if ($ident === 'WLEDPower') {
+                $driver->setMasterPower(
+                    power: (bool) $value,
+                    transition: 7
+                );
+            } else {
+                $driver->setMasterBrightness(
+                    brightness: (int) $value,
+                    transition: 7
+                );
             }
 
             usleep(150000);
@@ -1410,7 +1459,7 @@ class MediaLight extends IPSModule
             'AmbilightMode',
             'Ambilight-Modus',
             'AMBI.Mode',
-            50
+            15
         );
 
         $this->EnableAction(
@@ -1592,8 +1641,34 @@ class MediaLight extends IPSModule
         );
     }
 
+    private function registerDisplayProfiles(): void
+    {
+        $definitions = [
+            ['MEDIA.Percent', ' %', 'Intensity'],
+            ['MEDIA.FPS', ' fps', 'Graph'],
+            ['MEDIA.mA', ' mA', 'Electricity'],
+            ['MEDIA.Sekunden', ' s', 'Clock']
+        ];
+
+        foreach ($definitions as [$profile, $suffix, $icon]) {
+            if (!IPS_VariableProfileExists($profile)) {
+                IPS_CreateVariableProfile(
+                    $profile,
+                    VARIABLETYPE_INTEGER
+                );
+            }
+
+            IPS_SetVariableProfileText($profile, '', $suffix);
+            IPS_SetVariableProfileIcon($profile, $icon);
+        }
+
+        IPS_SetVariableProfileValues('MEDIA.Percent', 0, 100, 1);
+    }
+
     private function registerWLEDVariables(): void
     {
+        $this->registerDisplayProfiles();
+
         $position = 500;
 
         $definitions = [
@@ -1608,18 +1683,18 @@ class MediaLight extends IPSModule
             ['int', 'WLEDBusCount', 'WLED Bus-Anzahl'],
             ['bool', 'WLEDRGBW', 'WLED RGBW'],
             ['int', 'WLEDMaximumCurrent', 'WLED Stromlimit'],
-            ['int', 'WLEDCurrentPower', 'WLED aktuelle Leistung'],
-            ['int', 'WLEDFPS', 'WLED FPS'],
+            ['int', 'WLEDCurrentPower', 'WLED aktuelle Leistung', 'MEDIA.mA'],
+            ['int', 'WLEDFPS', 'WLED FPS', 'MEDIA.FPS'],
             ['int', 'WLEDEffectCount', 'WLED Effekte'],
             ['int', 'WLEDPaletteCount', 'WLED Paletten'],
-            ['int', 'WLEDUptime', 'WLED Laufzeit'],
+            ['int', 'WLEDUptime', 'WLED Laufzeit', 'MEDIA.Sekunden'],
             ['int', 'WLEDFreeHeap', 'WLED freier Speicher'],
             ['int', 'WLEDRSSI', 'WLED RSSI'],
-            ['int', 'WLEDSignalQuality', 'WLED Signalqualität'],
+            ['int', 'WLEDSignalQuality', 'WLED Signalqualität', 'MEDIA.Percent'],
             ['string', 'WLEDLiveMode', 'WLED Live-Modus'],
             ['string', 'WLEDLiveSourceIP', 'WLED Live-Quelle'],
             ['bool', 'WLEDPower', 'WLED eingeschaltet'],
-            ['int', 'WLEDBrightness', 'WLED Helligkeit'],
+            ['int', 'WLEDBrightness', 'WLED Helligkeit', '~Intensity.255'],
             ['bool', 'WLEDRealtime', 'WLED Realtime'],
             ['int', 'WLEDRealtimeMode', 'WLED Realtime-Override'],
             ['int', 'WLEDSegmentCount', 'WLED Segmente'],
@@ -1629,30 +1704,39 @@ class MediaLight extends IPSModule
             ['string', 'LayoutHint', 'Layout-Hinweise']
         ];
 
-        foreach ($definitions as [$type, $ident, $name]) {
+        foreach ($definitions as $definition) {
+            [$type, $ident, $name] = $definition;
+
+            $profile = isset($definition[3])
+                ? $definition[3]
+                : ($type === 'bool' ? '~Switch' : '');
+
             $position += 10;
 
             match ($type) {
                 'bool' => $this->RegisterVariableBoolean(
                     $ident,
                     $name,
-                    '~Switch',
+                    $profile,
                     $position
                 ),
                 'int' => $this->RegisterVariableInteger(
                     $ident,
                     $name,
-                    '',
+                    $profile,
                     $position
                 ),
                 default => $this->RegisterVariableString(
                     $ident,
                     $name,
-                    '',
+                    $profile,
                     $position
                 )
             };
         }
+
+        $this->EnableAction('WLEDPower');
+        $this->EnableAction('WLEDBrightness');
 
         for ($busNumber = 1; $busNumber <= 4; $busNumber++) {
             $this->registerWLEDBusVariables(

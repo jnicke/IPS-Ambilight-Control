@@ -246,4 +246,31 @@ final class Driver
             'rev'   => $bus->isReversed()
         ];
     }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function setMasterPower(
+        bool $power,
+        int $transition = 7
+    ): array {
+        return $this->client->postState([
+            'on'         => $power,
+            'transition' => $transition
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function setMasterBrightness(
+        int $brightness,
+        int $transition = 7
+    ): array {
+        return $this->client->postState([
+            'on'         => true,
+            'bri'        => max(1, min(255, $brightness)),
+            'transition' => $transition
+        ]);
+    }
 }
