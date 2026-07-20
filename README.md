@@ -6,7 +6,7 @@ dessen LED-Controller zusätzlich weitere, frei nutzbare LED-Stränge
 versorgt. Das Apple TV dient dabei als Ereignisquelle: Play, Pause und
 Standby schalten das Licht automatisch und praktisch verzögerungsfrei.
 
-Aktuelle Version: **0.4.0**
+Aktuelle Version: **0.5.0**
 
 ## Konzept
 
@@ -63,17 +63,37 @@ Bus 1 passt.
 - **Ereignisempfang per WebHook** unter `/hook/medialight` –
   Zustandswechsel erreichen IP-Symcon in unter einer Sekunde
 - Zyklischer Abruf der Bridge als Fallback
-- **Automatik** (eigener Schalter `Apple-TV-Automatik`):
+- **Automatik mit App-Regeln** (eigener Schalter `Apple-TV-Automatik`):
+  Im Instanzformular lässt sich je App festlegen, welcher
+  Ambilight-Modus bei Wiedergabe und bei Pause aktiviert wird und was
+  die freien Busse 2–4 dabei tun sollen (unverändert, aus, warmweiß
+  gedimmt oder neutralweiß). Zusätzlich gibt es eine Bus-Szene für den
+  Standby-Fall (z. B. Nachtlicht bei „TV aus“).
 
-  | Apple-TV-Zustand | Ambilight-Modus |
-  | --- | --- |
-  | playing | Live |
-  | paused | Warmweiß |
-  | standby | Aus |
+  Regelauflösung: exakter Treffer auf die App-ID vor einer
+  Fallback-Regel (leere App-ID) vor dem eingebauten Standard
+  (playing → Live, paused → Warmweiß, standby → Aus). Ohne
+  konfigurierte Regeln verhält sich das Modul also wie in v0.4.
 
-  Die Automatik reagiert nur auf Zustandswechsel, übersteuert also
-  keine manuell gewählten Modi bei jedem Ereignis erneut. Fällt die
-  Bridge aus, wird der letzte Modus bewusst gehalten.
+  Beispiele:
+
+  | App | Wiedergabe | Pause | Busse 2–4 |
+  | --- | --- | --- | --- |
+  | Musik | Aus | Warmweiß | warmweiß gedimmt |
+  | ARTE | Live | Nacht | warmweiß gedimmt |
+  | Fallback | Live | Warmweiß | unverändert |
+
+  Hinweise:
+
+  - Die Automatik reagiert auf Wechsel von Zustand **oder** App –
+    manuell gewählte Modi werden nicht bei jedem Ereignis erneut
+    übersteuert. Fällt die Bridge aus, wird der letzte Modus gehalten.
+  - Die App-ID der laufenden App zeigt die Statusvariable
+    `AppleTVApp` bzw. das Feld `app_id` unter `/status` der Bridge;
+    alle installierten Apps listet
+    `atvremote --id <Identifier> app_list` auf.
+  - „unverändert“ bedeutet: die Bus-Szene der vorherigen Regel bleibt
+    bestehen, bis eine andere Regel sie ersetzt.
 
 ### Ambilight-Modi (Presets)
 
@@ -179,11 +199,10 @@ Hinweise:
 
 ## Roadmap
 
-- **v0.5** App-abhängige Szenen (z. B. Netflix → Cinema-Modus,
-  Spotify → Ambilight aus + Busse warmweiß, Screensaver → Effekt)
 - Konfigurierbare Preset-Werte über das Instanzformular
 - Diagnose des Grabber-Hosts (CPU, Temperatur, FPS)
 - Unterstützung mehrerer Apple TVs
+- Audio-reaktive Bus-Szenen (WLED AudioReactive)
 
 ## Lizenz
 

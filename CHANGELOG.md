@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0
+
+- App-Regeln für die Apple-TV-Automatik: je App konfigurierbarer
+  Ambilight-Modus für Wiedergabe und Pause sowie eine Bus-Szene für
+  die freien Busse 2–4 (unverändert, aus, warmweiß gedimmt,
+  neutralweiß); Auflösung exakter Treffer → Fallback-Regel →
+  eingebauter Standard
+- Separate Bus-Szene für den Standby-Fall (z. B. Nachtlicht)
+- Automatik reagiert jetzt auch auf App-Wechsel bei laufender
+  Wiedergabe, nicht nur auf Zustandswechsel
+- Bus-Szenen werden als einzelne WLED-Transaktion geschaltet und
+  funktionieren auch parallel zum laufenden Live-Stream
+- Bridge (`app.py`): veraltete Metadaten (Titel, Interpret, Album,
+  Genre, Position) werden bei einem App-Wechsel zurückgesetzt;
+  Shutdown-Race in der Prozessverwaltung behoben
+
 ## 0.4.0
 
 - Apple-TV-Integration über die mitgelieferte pyatv-Bridge:
