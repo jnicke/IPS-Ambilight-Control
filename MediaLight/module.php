@@ -444,6 +444,15 @@ class MediaLight extends IPSModule
         $ident = (string) $Ident;
         $value = $Value;
 
+        if (preg_match('/^Bus([1-4])FollowMode$/', $ident, $matches)) {
+            $this->handleBusFollowAction(
+                (int) $matches[1],
+                (bool) $value
+            );
+
+            return;
+        }
+
         if ($ident === 'AmbilightMode') {
             $this->handleAmbilightModeAction((int) $value);
 
@@ -706,131 +715,9 @@ class MediaLight extends IPSModule
             $this->restoreControlledBuses($wled);
         }
 
-        switch ($mode) {
-            case self::MODE_LIVE:
-                $hyperHDR->setComponentState(
-                    component: 'VIDEOGRABBER',
-                    enabled: true
-                );
+        $buses = $this->getFollowingBuses();
 
-                usleep(300000);
-
-                $hyperHDR->setComponentState(
-                    component: 'LEDDEVICE',
-                    enabled: true
-                );
-                break;
-
-            case self::MODE_OFF:
-                $hyperHDR->setComponentState(
-                    component: 'VIDEOGRABBER',
-                    enabled: false
-                );
-
-                $this->waitForWLEDRealtimeEnd($wled);
-
-                $wled->setBusPower(
-                    busNumber: 1,
-                    power: false
-                );
-                break;
-
-            case self::MODE_WARM_WHITE:
-            case self::MODE_NIGHT:
-                $hyperHDR->setComponentState(
-                    component: 'VIDEOGRABBER',
-                    enabled: false
-                );
-
-                $this->waitForWLEDRealtimeEnd($wled);
-
-                [$red, $green, $blue, $white] = self::WARM_WHITE_RGBW;
-
-                $wled->setBusRgbw(
-                    busNumber: 1,
-                    red: $red,
-                    green: $green,
-                    blue: $blue,
-                    white: $white,
-                    brightness: $mode === self::MODE_NIGHT
-                        ? self::NIGHT_BRIGHTNESS
-                        : self::WARM_WHITE_BRIGHTNESS
-                );
-                break;
-
-            case self::MODE_CLEANING:
-                $hyperHDR->setComponentState(
-                    component: 'VIDEOGRABBER',
-                    enabled: false
-                );
-
-                $this->waitForWLEDRealtimeEnd($wled);
-
-                $controller = $wled->readController();
-
-                $this->captureCleaningSnapshot($controller);
-
-                $transaction = $wled->beginTransaction();
-
-                [$red, $green, $blue, $white] = self::CLEANING_RGBW;
-
-                for (
-                    $busNumber = 1;
-                    $busNumber <= $controller->getBusCount();
-                    $busNumber++
-                ) {
-                    $transaction
-                        ->bus($busNumber)
-                        ->power(true)
-                        ->brightness(255)
-                        ->rgbw($red, $green, $blue, $white)
-                        ->effect(self::FX_SOLID);
-                }
-
-                $transaction->commit(transition: 7);
-                break;
-
-            case self::MODE_FIREPLACE:
-                $hyperHDR->setComponentState(
-                    component: 'VIDEOGRABBER',
-                    enabled: false
-                );
-
-                $this->waitForWLEDRealtimeEnd($wled);
-
-                $wled->setBusEffect(
-                    busNumber: 1,
-                    effect: self::FX_FIRE_2012,
-                    speed: 120,
-                    intensity: 128,
-                    palette: self::PALETTE_FIRE,
-                    brightness: 140
-                );
-                break;
-
-            case self::MODE_RAINBOW:
-                $hyperHDR->setComponentState(
-                    component: 'VIDEOGRABBER',
-                    enabled: false
-                );
-
-                $this->waitForWLEDRealtimeEnd($wled);
-
-                $wled->setBusEffect(
-                    busNumber: 1,
-                    effect: self::FX_RAINBOW,
-                    speed: 60,
-                    intensity: 128,
-                    palette: self::PALETTE_DEFAULT,
-                    brightness: 128
-                );
-                break;
-
-            default:
-                throw new InvalidArgumentException(
-                    'Unbekannter Ambilight-Modus: ' . $mode
-                );
-        }
+        $this->applyModeToBuses($mode, $buses, $hyperHDR, $wled);
 
         $this->WriteAttributeInteger(
             'PreviousAmbilightMode',
@@ -846,6 +733,200 @@ class MediaLight extends IPSModule
 
         $status = $hyperHDR->readStatus();
         $this->getStatusManager()->applyHyperHDR($status);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function getFollowingBuses(): array
+    {
+        $buses = [];
+
+        for ($busNumber = 1; $busNumber <= 4; $busNumber++) {
+            if ($this->GetValue('Bus' . $busNumber . 'FollowMode')) {
+                $buses[] = $busNumber;
+            }
+        }
+
+        return $buses;
+    }
+
+    /**
+     * @param list<int> $buses
+     */
+    private function applyModeToBuses(
+        int $mode,
+        array $buses,
+        HyperHDRDriver $hyperHDR,
+        WLEDDriver $wled
+    ): void {
+        if ($mode === self::MODE_LIVE) {
+            $hyperHDR->setComponentState(
+                component: 'VIDEOGRABBER',
+                enabled: true
+            );
+
+            usleep(300000);
+
+            $hyperHDR->setComponentState(
+                component: 'LEDDEVICE',
+                enabled: true
+            );
+
+            return;
+        }
+
+        $hyperHDR->setComponentState(
+            component: 'VIDEOGRABBER',
+            enabled: false
+        );
+
+        $this->waitForWLEDRealtimeEnd($wled);
+
+        if ($mode === self::MODE_CLEANING) {
+            $controller = $wled->readController();
+
+            $this->captureCleaningSnapshot($controller);
+
+            $transaction = $wled->beginTransaction();
+
+            [$red, $green, $blue, $white] = self::CLEANING_RGBW;
+
+            for (
+                $busNumber = 1;
+                $busNumber <= $controller->getBusCount();
+                $busNumber++
+            ) {
+                $transaction
+                    ->bus($busNumber)
+                    ->power(true)
+                    ->brightness(255)
+                    ->rgbw($red, $green, $blue, $white)
+                    ->effect(self::FX_SOLID);
+            }
+
+            $transaction->commit(transition: 7);
+
+            return;
+        }
+
+        if ($buses === []) {
+            return;
+        }
+
+        foreach ($buses as $busNumber) {
+            $this->applyModeToSingleBus($mode, $busNumber, $wled);
+        }
+    }
+
+    private function applyModeToSingleBus(
+        int $mode,
+        int $busNumber,
+        WLEDDriver $wled
+    ): void {
+        switch ($mode) {
+            case self::MODE_OFF:
+                $wled->setBusPower(
+                    busNumber: $busNumber,
+                    power: false
+                );
+                break;
+
+            case self::MODE_WARM_WHITE:
+            case self::MODE_NIGHT:
+                [$red, $green, $blue, $white] = self::WARM_WHITE_RGBW;
+
+                $wled->setBusRgbw(
+                    busNumber: $busNumber,
+                    red: $red,
+                    green: $green,
+                    blue: $blue,
+                    white: $white,
+                    brightness: $mode === self::MODE_NIGHT
+                        ? self::NIGHT_BRIGHTNESS
+                        : self::WARM_WHITE_BRIGHTNESS
+                );
+                break;
+
+            case self::MODE_FIREPLACE:
+                $wled->setBusEffect(
+                    busNumber: $busNumber,
+                    effect: self::FX_FIRE_2012,
+                    speed: 120,
+                    intensity: 128,
+                    palette: self::PALETTE_FIRE,
+                    brightness: 140
+                );
+                break;
+
+            case self::MODE_RAINBOW:
+                $wled->setBusEffect(
+                    busNumber: $busNumber,
+                    effect: self::FX_RAINBOW,
+                    speed: 60,
+                    intensity: 128,
+                    palette: self::PALETTE_DEFAULT,
+                    brightness: 128
+                );
+                break;
+
+            default:
+                throw new InvalidArgumentException(
+                    'Unbekannter Ambilight-Modus: ' . $mode
+                );
+        }
+    }
+
+    private function handleBusFollowAction(
+        int $busNumber,
+        bool $enabled
+    ): void {
+        try {
+            $this->SetValue('Bus' . $busNumber . 'FollowMode', $enabled);
+
+            $wled = $this->getWLEDDriver();
+            $currentMode = $this->GetValue('AmbilightMode');
+
+            if ($enabled) {
+                if (
+                    $currentMode !== self::MODE_LIVE
+                    && $currentMode !== self::MODE_CLEANING
+                ) {
+                    $this->applyModeToSingleBus(
+                        $currentMode,
+                        $busNumber,
+                        $wled
+                    );
+                }
+            } else {
+                $wled->setBusPower(
+                    busNumber: $busNumber,
+                    power: false
+                );
+            }
+
+            usleep(200000);
+
+            $controller = $wled->readController();
+            $this->getStatusManager()->applyWLED($controller);
+
+            $this->SetValue('LastActionError', '');
+        } catch (Throwable $exception) {
+            $this->SetValue(
+                'LastActionError',
+                $exception->getMessage()
+            );
+
+            $this->logException(
+                sprintf(
+                    'Bus %d Folge-Schalter konnte nicht angewendet werden',
+                    $busNumber
+                ),
+                $exception
+            );
+
+            throw $exception;
+        }
     }
 
     private function waitForWLEDRealtimeEnd(
@@ -1726,6 +1807,10 @@ class MediaLight extends IPSModule
             ['bool', 'WLEDUDPReceive', 'WLED UDP empfangen'],
             ['bool', 'SegmentsInSync', 'WLED-Segmentlayout synchron'],
             ['bool', 'SyncSegments', 'WLED-Segmente synchronisieren'],
+            ['bool', 'Bus1FollowMode', 'Bus 1 folgt Ambilight-Modus'],
+            ['bool', 'Bus2FollowMode', 'Bus 2 folgt Ambilight-Modus'],
+            ['bool', 'Bus3FollowMode', 'Bus 3 folgt Ambilight-Modus'],
+            ['bool', 'Bus4FollowMode', 'Bus 4 folgt Ambilight-Modus'],
             ['string', 'LayoutHint', 'Layout-Hinweise']
         ];
 
@@ -1763,6 +1848,18 @@ class MediaLight extends IPSModule
         $this->EnableAction('WLEDPower');
         $this->EnableAction('WLEDBrightness');
         $this->EnableAction('SyncSegments');
+        $this->EnableAction('Bus1FollowMode');
+        $this->EnableAction('Bus2FollowMode');
+        $this->EnableAction('Bus3FollowMode');
+        $this->EnableAction('Bus4FollowMode');
+
+        if ($this->GetValue('Bus1FollowMode') === false
+            && $this->GetValue('Bus2FollowMode') === false
+            && $this->GetValue('Bus3FollowMode') === false
+            && $this->GetValue('Bus4FollowMode') === false
+        ) {
+            $this->SetValue('Bus1FollowMode', true);
+        }
 
         for ($busNumber = 1; $busNumber <= 4; $busNumber++) {
             $this->registerWLEDBusVariables(
