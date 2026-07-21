@@ -27,6 +27,8 @@ final class BusUpdate
 
     private ?bool $reversed = null;
 
+    private ?bool $frozen = null;
+
     public function __construct(
         private readonly int $busNumber,
         private readonly int $segmentId
@@ -132,6 +134,13 @@ final class BusUpdate
         return $this;
     }
 
+    public function freeze(bool $frozen): self
+    {
+        $this->frozen = $frozen;
+
+        return $this;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -173,6 +182,10 @@ final class BusUpdate
 
         if ($this->reversed !== null) {
             $payload['rev'] = $this->reversed;
+        }
+
+        if ($this->frozen !== null) {
+            $payload['frz'] = $this->frozen;
         }
 
         return $payload;

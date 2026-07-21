@@ -785,6 +785,8 @@ class MediaLight extends IPSModule
 
         $this->waitForWLEDRealtimeEnd($wled);
 
+        $this->unfreezeAllSegments($wled);
+
         if ($mode === self::MODE_CLEANING) {
             $controller = $wled->readController();
 
@@ -849,6 +851,40 @@ class MediaLight extends IPSModule
 
         if ($changed) {
             $transaction->commit(transition: 7);
+        }
+    }
+
+    /**
+     * Hebt bei ALLEN WLED-Segmenten den Realtime-Freeze auf, damit sie nach
+     * dem Verlassen des Live-Modus wieder aus ihrem eigenen Zustand rendern.
+     * Ohne dies bleibt ein von HyperHDR eingefrorenes Segment dunkel, obwohl
+     * Farbe/Helligkeit/Power korrekt gesetzt sind.
+     */
+    private function unfreezeAllSegments(WLEDDriver $wled): void
+    {
+        $transaction = $wled->beginTransaction();
+        $changed = false;
+
+        for ($busNumber = 1; $busNumber <= 4; $busNumber++) {
+            try {
+                $transaction
+                    ->bus($busNumber)
+                    ->freeze(false);
+
+                $changed = true;
+            } catch (\Throwable $exception) {
+                $this->getLogger()->warning(
+                    'Segment konnte nicht ent-freezet werden',
+                    [
+                        'busNumber' => $busNumber,
+                        'message'   => $exception->getMessage()
+                    ]
+                );
+            }
+        }
+
+        if ($changed) {
+            $transaction->commit();
         }
     }
 

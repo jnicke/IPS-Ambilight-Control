@@ -131,7 +131,8 @@ final class Driver
 
         $transaction
             ->bus($busNumber)
-            ->power($power);
+            ->power($power)
+            ->freeze(false);
 
         return $transaction->commit(
             transition: $transition,
@@ -152,7 +153,8 @@ final class Driver
         $transaction
             ->bus($busNumber)
             ->power(true)
-            ->brightness($brightness);
+            ->brightness($brightness)
+            ->freeze(false);
 
         return $transaction->commit(
             transition: $transition
@@ -183,7 +185,8 @@ final class Driver
                 $blue,
                 $white
             )
-            ->effect(0);
+            ->effect(0)
+            ->freeze(false);
 
         return $transaction->commit(
             transition: $transition
@@ -211,7 +214,8 @@ final class Driver
             ->effect($effect)
             ->speed($speed)
             ->intensity($intensity)
-            ->palette($palette);
+            ->palette($palette)
+            ->freeze(false);
 
         return $transaction->commit(
             transition: $transition
