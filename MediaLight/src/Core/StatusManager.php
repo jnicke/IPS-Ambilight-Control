@@ -138,7 +138,7 @@ final class StatusManager
             }
         }
 
-        for ($busNumber = 2; $busNumber <= 4; $busNumber++) {
+        for ($busNumber = 1; $busNumber <= 4; $busNumber++) {
             $segment = $state->getSegment($busNumber - 1);
 
             if ($segment instanceof Segment) {
