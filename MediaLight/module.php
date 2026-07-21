@@ -494,7 +494,7 @@ class MediaLight extends IPSModule
 
         if (
             preg_match(
-                '/^WLEDBus([2-4])(Power|Brightness|Color|White|Effect)$/',
+                '/^WLEDBus([1-4])(Power|Brightness|Color|White|Effect)$/',
                 $ident,
                 $matches
             ) !== 1
@@ -761,6 +761,8 @@ class MediaLight extends IPSModule
         WLEDDriver $wled
     ): void {
         if ($mode === self::MODE_LIVE) {
+            $this->stopEffectOnIdleBuses($buses, $wled);
+
             $hyperHDR->setComponentState(
                 component: 'VIDEOGRABBER',
                 enabled: true
@@ -816,6 +818,37 @@ class MediaLight extends IPSModule
 
         foreach ($buses as $busNumber) {
             $this->applyModeToSingleBus($mode, $busNumber, $wled);
+        }
+    }
+
+    /**
+     * Stoppt laufende Effekte (Kaminfeuer/Regenbogen) auf den Deko-Bussen
+     * 2-4, die NICHT dem Modus folgen, damit sie danach frei einzeln
+     * bedienbar sind. Farbe und Helligkeit bleiben erhalten.
+     *
+     * @param list<int> $followingBuses
+     */
+    private function stopEffectOnIdleBuses(
+        array $followingBuses,
+        WLEDDriver $wled
+    ): void {
+        $transaction = $wled->beginTransaction();
+        $changed = false;
+
+        for ($busNumber = 2; $busNumber <= 4; $busNumber++) {
+            if (in_array($busNumber, $followingBuses, true)) {
+                continue;
+            }
+
+            $transaction
+                ->bus($busNumber)
+                ->effect(self::FX_SOLID);
+
+            $changed = true;
+        }
+
+        if ($changed) {
+            $transaction->commit(transition: 7);
         }
     }
 
@@ -1963,7 +1996,7 @@ class MediaLight extends IPSModule
 
     private function registerWLEDControlVariables(): void
     {
-        for ($busNumber = 2; $busNumber <= 4; $busNumber++) {
+        for ($busNumber = 1; $busNumber <= 4; $busNumber++) {
             $prefix = 'WLEDBus' . $busNumber;
             $caption = 'WLED Bus ' . $busNumber . ' ';
             $position = 2000 + ($busNumber * 100);
@@ -2103,9 +2136,9 @@ class MediaLight extends IPSModule
     private function assertControllableBus(
         int $busNumber
     ): void {
-        if ($busNumber < 2 || $busNumber > 4) {
+        if ($busNumber < 1 || $busNumber > 4) {
             throw new InvalidArgumentException(
-                'Nur die WLED-Busse 2 bis 4 sind direkt steuerbar.'
+                'Nur die WLED-Busse 1 bis 4 sind direkt steuerbar.'
             );
         }
     }
