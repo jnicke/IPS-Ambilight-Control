@@ -335,6 +335,22 @@ class MediaLight extends IPSModule
 
     public function SynchronizeWLEDSegments(): void
     {
+        echo $this->runSegmentSync();
+    }
+
+    private function handleSyncSegmentsAction(): void
+    {
+        $this->SetValue('SyncSegments', true);
+
+        try {
+            $this->runSegmentSync();
+        } finally {
+            $this->SetValue('SyncSegments', false);
+        }
+    }
+
+    private function runSegmentSync(): string
+    {
         try {
             $driver = $this->getWLEDDriver();
             $driver->synchronizeSegments();
@@ -346,7 +362,9 @@ class MediaLight extends IPSModule
 
             $this->updateLayoutConsistency($controller, null);
 
-            echo sprintf(
+            $this->SetValue('LastActionError', '');
+
+            return sprintf(
                 'WLED-Segmente erfolgreich synchronisiert. '
                 . '%d Busse und %d Segmente erkannt.',
                 $controller->getBusCount(),
@@ -363,7 +381,7 @@ class MediaLight extends IPSModule
                 $exception
             );
 
-            echo 'WLED-Segmentsynchronisierung fehlgeschlagen: '
+            return 'WLED-Segmentsynchronisierung fehlgeschlagen: '
                 . $exception->getMessage();
         }
     }
@@ -446,6 +464,12 @@ class MediaLight extends IPSModule
                 $ident,
                 (bool) $value
             );
+
+            return;
+        }
+
+        if ($ident === 'SyncSegments') {
+            $this->handleSyncSegmentsAction();
 
             return;
         }
@@ -1701,6 +1725,7 @@ class MediaLight extends IPSModule
             ['bool', 'WLEDUDPSend', 'WLED UDP senden'],
             ['bool', 'WLEDUDPReceive', 'WLED UDP empfangen'],
             ['bool', 'SegmentsInSync', 'WLED-Segmentlayout synchron'],
+            ['bool', 'SyncSegments', 'WLED-Segmente synchronisieren'],
             ['string', 'LayoutHint', 'Layout-Hinweise']
         ];
 
@@ -1737,6 +1762,7 @@ class MediaLight extends IPSModule
 
         $this->EnableAction('WLEDPower');
         $this->EnableAction('WLEDBrightness');
+        $this->EnableAction('SyncSegments');
 
         for ($busNumber = 1; $busNumber <= 4; $busNumber++) {
             $this->registerWLEDBusVariables(
