@@ -1315,6 +1315,13 @@ class MediaLight extends IPSModule
             $position += 10
         );
 
+        $this->RegisterVariableBoolean(
+            'AppleTVAppCurrent',
+            'Apple TV App aktuell',
+            '~Alert.Reversed',
+            $position += 10
+        );
+
         $this->RegisterVariableString(
             'AppleTVTitle',
             'Apple TV Titel',
@@ -1435,7 +1442,7 @@ class MediaLight extends IPSModule
         $this->SetValue('AppleTVOnline', $status->isOnline());
         $this->SetValue('AppleTVPower', $status->getPower());
         $this->SetValue('AppleTVState', $status->getState());
-        $this->SetValue('AppleTVApp', $status->getApp());
+        $this->applyAppleTVApp($status);
         $this->SetValue('AppleTVTitle', $status->getTitle());
         $this->SetValue(
             'AppleTVLastEvent',
@@ -1445,11 +1452,38 @@ class MediaLight extends IPSModule
         );
     }
 
+    /**
+     * Uebernimmt den App-Namen nur, wenn der Apple TV dazu auch eine
+     * App-ID meldet. Faellt die App-ID weg (Wiedergabe beendet, App im
+     * Hintergrund), liefert pyatv haeufig noch den alten Namen mit. In
+     * diesem Fall bleibt der zuletzt bekannte Name stehen, wird aber
+     * ueber AppleTVAppCurrent als nicht mehr aktuell gekennzeichnet.
+     */
+    private function applyAppleTVApp(AppleTVStatus $status): void
+    {
+        $app = trim($status->getApp());
+        $appId = trim($status->getAppId());
+
+        if ($appId !== '' && $app !== '') {
+            $this->SetValue('AppleTVApp', $app);
+            $this->SetValue('AppleTVAppCurrent', true);
+
+            return;
+        }
+
+        $this->SetValue('AppleTVAppCurrent', false);
+
+        if ((string) $this->GetValue('AppleTVApp') === '' && $app !== '') {
+            $this->SetValue('AppleTVApp', $app);
+        }
+    }
+
     private function resetAppleTVStatus(): void
     {
         $this->SetValue('AppleTVOnline', false);
         $this->SetValue('AppleTVPower', 'unknown');
         $this->SetValue('AppleTVState', 'offline');
+        $this->SetValue('AppleTVAppCurrent', false);
     }
 
     /**
