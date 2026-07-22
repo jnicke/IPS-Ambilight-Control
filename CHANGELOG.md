@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.9
+
+- Beim Wechsel in den Live-Modus werden die Segmente der folgenden
+  Busse eingeschaltet. War ein Bus zuvor abgeschaltet – etwa durch die
+  Standby-Szene der Apple-TV-Automatik –, blieb der Strip dunkel,
+  obwohl der HyperHDR-Stream lief: Ein ausgeschaltetes Segment gibt
+  ankommende Stream-Daten nicht aus
+- Das Einschalten erfolgt vor dem Aktivieren des Grabbers, da Bus 1
+  während des Realtime-Betriebs gesperrt ist
+
 ## 0.5.8
 
 - App-Name wird nur noch übernommen, wenn der Apple TV dazu auch eine

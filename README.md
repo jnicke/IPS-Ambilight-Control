@@ -6,7 +6,7 @@ dessen LED-Controller zusätzlich weitere, frei nutzbare LED-Stränge
 versorgt. Das Apple TV dient dabei als Ereignisquelle: Play, Pause und
 Standby schalten das Licht automatisch und praktisch verzögerungsfrei.
 
-Aktuelle Version: **0.5.8**
+Aktuelle Version: **0.5.9**
 
 ## Konzept
 

@@ -933,6 +933,7 @@ class MediaLight extends IPSModule
     ): void {
         if ($mode === self::MODE_LIVE) {
             $this->stopEffectOnIdleBuses($buses, $wled);
+            $this->powerOnFollowingBuses($buses, $wled);
 
             $hyperHDR->setComponentState(
                 component: 'VIDEOGRABBER',
@@ -1018,6 +1019,54 @@ class MediaLight extends IPSModule
                 ->effect(self::FX_SOLID);
 
             $changed = true;
+        }
+
+        if ($changed) {
+            $transaction->commit(transition: 7);
+        }
+    }
+
+    /**
+     * Schaltet die Segmente der dem Modus folgenden Busse ein, bevor der
+     * Live-Stream startet. Ohne diesen Schritt bleibt ein Bus dunkel, der
+     * zuvor abgeschaltet wurde (z. B. durch die Standby-Szene der
+     * Apple-TV-Automatik): Der Stream liefert zwar Daten, ein
+     * ausgeschaltetes Segment gibt sie aber nicht aus.
+     *
+     * Muss vor dem Aktivieren des Grabbers laufen, da HyperHDR das
+     * Segment anschliessend einfriert und Bus 1 waehrend des
+     * Realtime-Betriebs gesperrt ist.
+     *
+     * @param list<int> $buses
+     */
+    private function powerOnFollowingBuses(
+        array $buses,
+        WLEDDriver $wled
+    ): void {
+        if ($buses === []) {
+            return;
+        }
+
+        $transaction = $wled->beginTransaction();
+        $changed = false;
+
+        foreach ($buses as $busNumber) {
+            try {
+                $transaction
+                    ->bus($busNumber)
+                    ->power(true)
+                    ->freeze(false);
+
+                $changed = true;
+            } catch (\Throwable $exception) {
+                $this->getLogger()->warning(
+                    'Bus konnte vor dem Live-Start nicht eingeschaltet werden',
+                    [
+                        'busNumber' => $busNumber,
+                        'message'   => $exception->getMessage()
+                    ]
+                );
+            }
         }
 
         if ($changed) {
