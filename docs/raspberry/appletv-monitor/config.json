@@ -1,0 +1,12 @@
+{
+  "identifier": "27E85A46-3DF8-48F5-9608-58D33E7CE76B",
+  "address": "192.168.178.145",
+  "listen": "0.0.0.0",
+  "port": 8091,
+  "atvscript": "/home/pi/pyatv/bin/atvscript",
+  "reconnect_delay": 5,
+  "log_level": "INFO",
+  "webhook_url": "http://192.168.123.219:3777/hook/medialight",
+  "webhook_timeout": 5,
+  "companion_credentials": "eb6ed7a179a27f3c73a94d163329a1fa1aa197f2481215c62511cdb44d4c361b:f8de6c4b706d52eafd89b07b0f1c12e2e944bc8a5f198fd8b9f617c0ca7b7434:32374538354134362d334446382d343846352d393630382d353844333345374345373642:62363533363339642d646439312d346363632d623839642d626430376261643432376666"
+}

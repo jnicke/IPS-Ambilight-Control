@@ -1,5 +1,74 @@
 # Changelog
 
+## 0.5.8
+
+- App-Name wird nur noch übernommen, wenn der Apple TV dazu auch eine
+  App-ID meldet. Beim Verlassen einer Wiedergabe liefert pyatv häufig
+  den alten Namen ohne App-ID nach; dieser Wert galt bisher als aktuell
+- Neue Variable `AppleTVAppCurrent` (Profil `~Alert.Reversed`): der
+  zuletzt bekannte App-Name bleibt sichtbar, wird aber als nicht mehr
+  aktuell gekennzeichnet
+- Bridge (`app.py`): neues Statusfeld `app_current` nach derselben
+  Regel; `PUSH_SIGNIFICANT_KEYS` um das Feld erweitert, damit ein
+  Wechsel auch einen WebHook-Push auslöst
+- Bridge (`config.json`): neuer optionaler Schlüssel
+  `companion_credentials`. Ohne Companion-Pairing verbindet pyatv das
+  Protokoll stillschweigend nicht und meldet dauerhaft keine App
+
+## 0.5.7
+
+- Auswahlprofil `AMBI.Effect` für die Effektvariablen aller Busse:
+  Effekte werden im Klartext statt als ID ausgewählt
+- Die Effektliste wird bei jedem Übernehmen aus `/json/effects` des
+  Controllers gelesen und passt sich damit der installierten
+  WLED-Version an; reservierte Platzhalter (`RSVD`) werden gefiltert
+- Eingebaute Fallback-Liste für die erste Registrierung, solange noch
+  keine Controller-Verbindung besteht
+- WLED-Client um `getEffects()`, Treiber um `readEffects()` erweitert
+
+## 0.5.6
+
+- Segmente werden beim Verlassen des Live-Modus automatisch
+  ent-freezet (`frz`). Ein von HyperHDR eingefrorenes Segment rendert
+  nicht aus seinem eigenen Zustand, sondern wartet auf UDP-Daten und
+  bleibt dunkel, obwohl Farbe, Helligkeit und Power korrekt gesetzt
+  sind
+- Zusätzlich sendet jede manuelle Bus-Aktion (Power, Helligkeit,
+  Farbe, Effekt) `frz: false` mit, damit ein Segment auch bei direkter
+  Ansteuerung sicher auftaut
+- `BusUpdate` um Feld und Setter `freeze()` erweitert
+
+## 0.5.5
+
+- Bus 1 war nicht schaltbar: Der Befehl erreichte den Controller, aber
+  die zweite Schleife in `StatusManager::applyWLED()` las die
+  Segmentzustände erst ab Bus 2 zurück. Die Variablen von Bus 1
+  fielen dadurch sofort wieder auf ihren alten Wert
+
+## 0.5.4
+
+- Live-Modus stoppt laufende Effekte auf den Deko-Bussen 2–4, die dem
+  Modus nicht folgen. Kaminfeuer oder Regenbogen liefen dort bisher
+  weiter und uebermalten manuell gesetzte Farben
+- Bus 1 ist außerhalb des Live-Betriebs einzeln steuerbar
+  (Ein/Aus, Helligkeit, Farbe, Weißkanal, Effekt)
+
+## 0.5.3
+
+- Vier Schalter `Bus<N>FollowMode`: je Bus lässt sich festlegen, ob er
+  dem Ambilight-Modus folgt. Zuvor wirkten alle Modi außer Reinigung
+  fest auf Bus 1
+- Umschalten wirkt sofort, ohne Moduswechsel
+
+## 0.5.2
+
+- Taster `SyncSegments` zum Auslösen der Segment-Synchronisierung aus
+  der Bedienoberfläche
+
+## 0.5.1
+
+- Master-Steuerung des Controllers: `WLEDPower` und `WLEDBrightness`
+
 ## 0.5.0
 
 - App-Regeln für die Apple-TV-Automatik: je App konfigurierbarer

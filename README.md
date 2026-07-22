@@ -6,7 +6,7 @@ dessen LED-Controller zusätzlich weitere, frei nutzbare LED-Stränge
 versorgt. Das Apple TV dient dabei als Ereignisquelle: Play, Pause und
 Standby schalten das Licht automatisch und praktisch verzögerungsfrei.
 
-Aktuelle Version: **0.5.0**
+Aktuelle Version: **0.5.8**
 
 ## Konzept
 
@@ -17,10 +17,12 @@ Das Modul folgt drei Grundsätzen:
    WLED-Konfiguration gelesen. Ändert man die LED-Zahlen im
    WLED-Webinterface, folgt das Modul – es gibt keine doppelte
    Pflege in IP-Symcon.
-2. **Bus 1 gehört dem Ambilight, Bus 2–4 sind frei.** HyperHDR streamt
+2. **Bus 1 gehört im Live-Betrieb dem Ambilight.** HyperHDR streamt
    per UDP auf das WLED-Hauptsegment (Segment 0 = Bus 1). Die Segmente
-   der Busse 2–4 bleiben unabhängig über IP-Symcon steuerbar –
-   auch während der Live-Stream läuft.
+   der Busse 2–4 bleiben unabhängig über IP-Symcon steuerbar – auch
+   während der Live-Stream läuft. Außerhalb des Live-Modus ist auch
+   Bus 1 frei steuerbar; je Bus legt ein Schalter fest, ob er dem
+   Ambilight-Modus folgt.
 3. **Ereignisse statt Abfragen.** Der Apple-TV-Status kommt per Push
    über eine kleine pyatv-Bridge in IP-Symcon an (WebHook). Ein
    langsamer zyklischer Abruf dient nur als Absicherung, falls ein
@@ -39,8 +41,15 @@ Bus 1 passt.
 
 - Statusüberwachung (Firmware, LED-Anzahl, Busse, Segmente,
   Realtime-Status, Leistung, Signalqualität u. v. m.)
-- Steuerung der Busse 2–4: Ein/Aus, Helligkeit, Farbe (RGB),
-  Weißkanal, Effekt-ID – je Bus als schaltbare Variablen
+- Master-Steuerung des Controllers: Ein/Aus und Helligkeit
+- Steuerung der Busse 1–4: Ein/Aus, Helligkeit, Farbe (RGB),
+  Weißkanal, Effekt – je Bus als schaltbare Variablen. Die Effekte
+  werden über das Profil `AMBI.Effect` im Klartext ausgewählt; die
+  Liste stammt aus dem Controller und passt sich der installierten
+  WLED-Version an
+- Schalter `Bus<N>FollowMode` je Bus: legt fest, ob der Bus dem
+  Ambilight-Modus folgt oder frei bedienbar bleibt
+- Taster zum Auslösen der Segment-Synchronisierung
 - Segment-Synchronisierung aus der WLED-Buskonfiguration
 - Testfunktion je Bus
 - Layout-Konsistenzprüfung (`SegmentsInSync`, `LayoutHint`)
@@ -60,6 +69,9 @@ Bus 1 passt.
 - Anbindung über die mitgelieferte **pyatv-Bridge** (siehe unten)
 - Statusvariablen: Online, Betriebszustand, Wiedergabestatus,
   aktive App, Titel, Zeitpunkt des letzten Ereignisses
+- `AppleTVAppCurrent` zeigt an, ob der App-Name noch aktuell ist:
+  Beim Verlassen einer Wiedergabe meldet der Apple TV häufig den
+  alten Namen ohne App-ID weiter
 - **Ereignisempfang per WebHook** unter `/hook/medialight` –
   Zustandswechsel erreichen IP-Symcon in unter einer Sekunde
 - Zyklischer Abruf der Bridge als Fallback
@@ -113,6 +125,14 @@ Besonderheiten:
 
 - Vor dem Beschreiben des TV-Segments wartet das Modul, bis WLED den
   Realtime-Modus verlassen hat (max. 6 s).
+- Beim Verlassen des Live-Modus werden alle Segmente ent-freezet.
+  Ein von HyperHDR eingefrorenes Segment (`frz`) ignoriert seinen
+  eigenen Zustand und bleibt dunkel, obwohl Farbe und Helligkeit
+  korrekt gesetzt sind.
+- Welche Busse einem Modus folgen, legen die Schalter
+  `Bus<N>FollowMode` fest. Ein Bus mit abgeschaltetem Follow bleibt
+  unabhängig bedienbar; beim Wechsel in den Live-Modus wird ein dort
+  laufender Effekt gestoppt, damit manuelle Farben sichtbar sind.
 - Der Reinigungsmodus sichert vorher den Zustand der Busse 2–4 in
   einem Snapshot und stellt ihn beim Verlassen wieder her –
   einschließlich laufender Effekte.
@@ -171,7 +191,8 @@ per HTTP POST an den IP-Symcon-WebHook.
   "reconnect_delay": 5,
   "log_level": "INFO",
   "webhook_url": "http://<IP-Symcon-IP>:3777/hook/medialight",
-  "webhook_timeout": 5
+  "webhook_timeout": 5,
+  "companion_credentials": "<Credentials aus dem Companion-Pairing>"
 }
 ```
 
@@ -183,6 +204,20 @@ Hinweise:
 - Der WebHook antwortet auf Anfragen ohne gültiges JSON mit
   `{"result": "invalid payload"}` (HTTP 400) – das eignet sich als
   einfacher Erreichbarkeitstest per `curl` vom Pi aus.
+- **Companion-Pairing ist Pflicht für App-Namen.** Ohne hinterlegte
+  Credentials überspringt pyatv das Companion-Protokoll stillschweigend
+  und meldet dauerhaft keine App. Pairing:
+
+  ```bash
+  atvremote --id <Identifier> --protocol companion pair
+  ```
+
+  Die ausgegebene Zeichenkette gehört als `companion_credentials` in
+  die `config.json`. Sie ist ein Zugangsdatum zum Apple TV und sollte
+  nicht in ein öffentliches Repository gelangen.
+- Nicht jede App meldet Wiedergabedaten an tvOS. Liefert eine App
+  weder `app` noch `device_state`, bleibt der Status auf „idle“ –
+  die Automatik kann dann nicht darauf reagieren.
 
 ## Wichtige Statusvariablen
 
@@ -193,7 +228,9 @@ Hinweise:
 | `LastActionError` | letzter Fehler einer Benutzeraktion (bleibt bis zur nächsten erfolgreichen Aktion stehen) |
 | `AmbilightMode` | aktives Preset |
 | `SegmentsInSync`, `LayoutHint` | Ergebnis der Layout-Konsistenzprüfung |
+| `WLEDPower`, `WLEDBrightness` | Master-Steuerung des Controllers |
 | `WLEDBus<N>…` | Buskonfiguration und Steuerung je Bus |
+| `Bus<N>FollowMode` | folgt der Bus dem Ambilight-Modus? |
 | `HyperHDR…` | HyperHDR-Status und Komponentenschalter |
 | `AppleTV…` | Apple-TV-Status und Automatik-Schalter |
 

@@ -28,7 +28,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 # Nur Änderungen an diesen Feldern lösen einen WebHook-Push aus.
 # Positions-Updates würden sonst im Sekundentakt Ereignisse erzeugen.
-PUSH_SIGNIFICANT_KEYS = ("online", "power", "state", "app", "app_id")
+PUSH_SIGNIFICANT_KEYS = ("online", "power", "state", "app", "app_id", "app_current")
 
 
 class AppleTVMonitor:
@@ -53,6 +53,7 @@ class AppleTVMonitor:
             "genre": "",
             "app": "",
             "app_id": "",
+            "app_current": False,
             "position": 0.0,
             "total_time": 0.0,
             "repeat": "Off",
@@ -274,6 +275,16 @@ class AppleTVMonitor:
 
         if app_id is not None:
             updates["app_id"] = str(app_id)
+        # Der Apple TV meldet beim Verlassen einer Wiedergabe haeufig
+        # app_id als leeren String, waehrend der App-Name im Event fehlt
+        # (app: null). Der zuletzt bekannte Name bleibt dann erhalten,
+        # wird aber als nicht mehr aktuell gekennzeichnet.
+        effective_app_id = updates.get("app_id", self.status["app_id"])
+        effective_app = updates.get("app", self.status["app"])
+        updates["app_current"] = bool(
+            str(effective_app_id).strip()
+            and str(effective_app).strip()
+        )
 
         # Bei einem App-Wechsel veraltete Metadaten der vorherigen App
         # zurücksetzen, sofern das Ereignis keine neuen Werte liefert.
@@ -358,10 +369,17 @@ class AppleTVMonitor:
         command = [
             str(self.config["atvscript"]),
             "--id",
-            str(self.config["identifier"]),
-            "push_updates"
+            str(self.config["identifier"])
         ]
 
+        credentials = str(
+            self.config.get("companion_credentials") or ""
+        ).strip()
+
+        if credentials:
+            command += ["--companion-credentials", credentials]
+
+        command.append("push_updates")
         logging.info("Starte Apple-TV-Überwachung: %s", " ".join(command))
 
         # Wichtig: atvscript push_updates beendet sich bei EOF auf stdin
