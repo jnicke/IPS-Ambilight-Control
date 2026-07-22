@@ -43,6 +43,28 @@ final class Client
     }
 
     /**
+     * Liefert die Effektnamen des Controllers in Reihenfolge der Effekt-IDs.
+     *
+     * @return list<string>
+     */
+    public function getEffects(): array
+    {
+        $effects = $this->get('/json/effects');
+
+        $names = [];
+
+        foreach ($effects as $name) {
+            if (!is_string($name)) {
+                continue;
+            }
+
+            $names[] = $name;
+        }
+
+        return $names;
+    }
+
+    /**
      * @param array<string, mixed> $payload
      *
      * @return array<string, mixed>

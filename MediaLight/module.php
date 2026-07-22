@@ -67,11 +67,70 @@ class MediaLight extends IPSModule
     private const BUS_SCENE_NEUTRAL_RGBW = [255, 220, 180, 255];
     private const BUS_SCENE_NEUTRAL_BRIGHTNESS = 200;
 
+    private const WLED_EFFECT_FALLBACK = [
+        0 => "Solid", 1 => "Blink", 2 => "Breathe", 3 => "Wipe",
+        4 => "Wipe Random", 5 => "Random Colors", 6 => "Sweep", 7 => "Dynamic",
+        8 => "Colorloop", 9 => "Rainbow", 10 => "Scan", 11 => "Scan Dual",
+        12 => "Fade", 13 => "Theater", 14 => "Theater Rainbow", 15 => "Running",
+        16 => "Saw", 17 => "Twinkle", 18 => "Dissolve", 19 => "Dissolve Rnd",
+        20 => "Sparkle", 21 => "Sparkle Dark", 22 => "Sparkle+", 23 => "Strobe",
+        24 => "Strobe Rainbow", 25 => "Strobe Mega", 26 => "Blink Rainbow", 27 => "Android",
+        28 => "Chase", 29 => "Chase Random", 30 => "Chase Rainbow", 31 => "Chase Flash",
+        32 => "Chase Flash Rnd", 33 => "Rainbow Runner", 34 => "Colorful", 35 => "Traffic Light",
+        36 => "Sweep Random", 37 => "Chase 2", 38 => "Aurora", 39 => "Stream",
+        40 => "Scanner", 41 => "Lighthouse", 42 => "Fireworks", 43 => "Rain",
+        44 => "Tetrix", 45 => "Fire Flicker", 46 => "Gradient", 47 => "Loading",
+        48 => "Rolling Balls", 49 => "Fairy", 50 => "Two Dots", 51 => "Fairytwinkle",
+        52 => "Running Dual", 53 => "Image", 54 => "Chase 3", 55 => "Tri Wipe",
+        56 => "Tri Fade", 57 => "Lightning", 58 => "ICU", 59 => "Multi Comet",
+        60 => "Scanner Dual", 61 => "Stream 2", 62 => "Oscillate", 63 => "Pride 2015",
+        64 => "Juggle", 65 => "Palette", 66 => "Fire 2012", 67 => "Colorwaves",
+        68 => "Bpm", 69 => "Fill Noise", 70 => "Noise 1", 71 => "Noise 2",
+        72 => "Noise 3", 73 => "Noise 4", 74 => "Colortwinkles", 75 => "Lake",
+        76 => "Meteor", 77 => "Copy Segment", 78 => "Railway", 79 => "Ripple",
+        80 => "Twinklefox", 81 => "Twinklecat", 82 => "Halloween Eyes", 83 => "Solid Pattern",
+        84 => "Solid Pattern Tri", 85 => "Spots", 86 => "Spots Fade", 87 => "Glitter",
+        88 => "Candle", 89 => "Fireworks Starburst", 90 => "Fireworks 1D", 91 => "Bouncing Balls",
+        92 => "Sinelon", 93 => "Sinelon Dual", 94 => "Sinelon Rainbow", 95 => "Popcorn",
+        96 => "Drip", 97 => "Plasma", 98 => "Percent", 99 => "Ripple Rainbow",
+        100 => "Heartbeat", 101 => "Pacifica", 102 => "Candle Multi", 103 => "Solid Glitter",
+        104 => "Sunrise", 105 => "Phased", 106 => "Twinkleup", 107 => "Noise Pal",
+        108 => "Sine", 109 => "Phased Noise", 110 => "Flow", 111 => "Chunchun",
+        112 => "Dancing Shadows", 113 => "Washing Machine", 114 => "Rotozoomer", 115 => "Blends",
+        116 => "TV Simulator", 117 => "Dynamic Smooth", 118 => "Spaceships", 119 => "Crazy Bees",
+        120 => "Ghost Rider", 121 => "Blobs", 122 => "Scrolling Text", 123 => "Drift Rose",
+        124 => "Distortion Waves", 125 => "Soap", 126 => "Octopus", 127 => "Waving Cell",
+        128 => "Pixels", 129 => "Pixelwave", 130 => "Juggles", 131 => "Matripix",
+        132 => "Gravimeter", 133 => "Plasmoid", 134 => "Puddles", 135 => "Midnoise",
+        136 => "Noisemeter", 137 => "Freqwave", 138 => "Freqmatrix", 139 => "GEQ",
+        140 => "Waterfall", 141 => "Freqpixels", 143 => "Noisefire", 144 => "Puddlepeak",
+        145 => "Noisemove", 146 => "Noise2D", 147 => "Perlin Move", 148 => "Ripple Peak",
+        149 => "Firenoise", 150 => "Squared Swirl", 151 => "PacMan", 152 => "DNA",
+        153 => "Matrix", 154 => "Metaballs", 155 => "Freqmap", 156 => "Gravcenter",
+        157 => "Gravcentric", 158 => "Gravfreq", 159 => "DJ Light", 160 => "Funky Plank",
+        161 => "Shimmer", 162 => "Pulser", 163 => "Blurz", 164 => "Drift",
+        165 => "Waverly", 166 => "Sun Radiation", 167 => "Colored Bursts", 168 => "Julia",
+        172 => "Game Of Life", 173 => "Tartan", 174 => "Polar Lights", 175 => "Swirl",
+        176 => "Lissajous", 177 => "Frizzles", 178 => "Plasma Ball", 179 => "Flow Stripe",
+        180 => "Hiphotic", 181 => "Sindots", 182 => "DNA Spiral", 183 => "Black Hole",
+        184 => "Wavesins", 185 => "Rocktaves", 186 => "Akemi", 187 => "PS Volcano",
+        188 => "PS Fire", 189 => "PS Fireworks", 190 => "PS Vortex", 191 => "PS Fuzzy Noise",
+        192 => "PS Ballpit", 193 => "PS Box", 194 => "PS Attractor", 195 => "PS Impact",
+        196 => "PS Waterfall", 197 => "PS Spray", 198 => "PS GEQ 2D", 199 => "PS GEQ Nova",
+        200 => "PS Ghost Rider", 201 => "PS Blobs", 202 => "PS DripDrop", 203 => "PS Pinball",
+        204 => "PS Dancing Shadows", 205 => "PS Fireworks 1D", 206 => "PS Sparkler", 207 => "PS Hourglass",
+        208 => "PS Spray 1D", 209 => "PS 1D Balance", 210 => "PS Chase", 211 => "PS Starburst",
+        212 => "PS GEQ 1D", 213 => "PS Fire 1D", 214 => "PS Sonic Stream", 215 => "PS Sonic Boom",
+        216 => "PS Springy", 217 => "PS Galaxy", 218 => "Color Clouds", 219 => "Slow Transition",
+    ];
+
     public function Create(): void
     {
         parent::Create();
 
         $this->registerAmbilightModeProfile();
+
+        $this->registerWLEDEffectProfile();
 
         $this->registerProperties();
         $this->registerGeneralVariables();
@@ -141,6 +200,8 @@ class MediaLight extends IPSModule
 
         $this->SetValue('Mode', 'READY');
         $this->SetValue('LastError', '');
+
+        $this->synchronizeWLEDEffectProfile();
 
         $this->Update();
     }
@@ -638,6 +699,116 @@ class MediaLight extends IPSModule
             );
 
             throw $exception;
+        }
+    }
+
+    /**
+     * Legt das Auswahlprofil fuer die WLED-Effekte an. Beim Anlegen wird die
+     * eingebaute Fallback-Liste verwendet, da in Create() noch keine
+     * Controller-Verbindung besteht. refreshWLEDEffectProfile() aktualisiert
+     * die Liste spaeter passend zur installierten WLED-Version.
+     */
+    /**
+     * Holt die Effektliste vom Controller und aktualisiert das Auswahlprofil.
+     * Schlaegt der Abruf fehl (Controller offline, WLED deaktiviert), bleibt
+     * die zuletzt gueltige Liste bestehen.
+     */
+    private function synchronizeWLEDEffectProfile(): void
+    {
+        if (!$this->ReadPropertyBoolean('WLEDEnabled')) {
+            return;
+        }
+
+        try {
+            $this->refreshWLEDEffectProfile(
+                $this->getWLEDDriver()->readEffects()
+            );
+        } catch (Throwable $exception) {
+            $this->logException(
+                'WLED-Effektliste konnte nicht geladen werden',
+                $exception
+            );
+        }
+    }
+
+    private function registerWLEDEffectProfile(): void
+    {
+        $this->writeWLEDEffectProfile(self::WLED_EFFECT_FALLBACK);
+    }
+
+    /**
+     * Aktualisiert das Effektprofil aus der Effektliste des Controllers.
+     *
+     * @param array<int|string, string> $effects
+     */
+    private function refreshWLEDEffectProfile(array $effects): void
+    {
+        if ($effects === []) {
+            return;
+        }
+
+        $named = [];
+
+        foreach ($effects as $index => $name) {
+            $named[(int) $index] = (string) $name;
+        }
+
+        $this->writeWLEDEffectProfile($named);
+    }
+
+    /**
+     * @param array<int, string> $effects
+     */
+    private function writeWLEDEffectProfile(array $effects): void
+    {
+        if ($effects === []) {
+            return;
+        }
+
+        $profile = 'AMBI.Effect';
+
+        if (!IPS_VariableProfileExists($profile)) {
+            IPS_CreateVariableProfile(
+                $profile,
+                VARIABLETYPE_INTEGER
+            );
+        }
+
+        IPS_SetVariableProfileIcon($profile, 'Bulb');
+
+        IPS_SetVariableProfileValues(
+            $profile,
+            0,
+            max(array_keys($effects)),
+            1
+        );
+
+        foreach (
+            IPS_GetVariableProfile($profile)['Associations'] as $association
+        ) {
+            IPS_SetVariableProfileAssociation(
+                $profile,
+                $association['Value'],
+                '',
+                '',
+                -1
+            );
+        }
+
+        foreach ($effects as $index => $name) {
+            $label = trim($name);
+
+            if ($label === '' || strtoupper($label) === 'RSVD') {
+                continue;
+            }
+
+            IPS_SetVariableProfileAssociation(
+                $profile,
+                $index,
+                $label,
+                '',
+                -1
+            );
         }
     }
 
@@ -2083,8 +2254,8 @@ class MediaLight extends IPSModule
 
             $this->RegisterVariableInteger(
                 $prefix . 'Effect',
-                $caption . 'Effekt-ID',
-                '',
+                $caption . 'Effekt',
+                'AMBI.Effect',
                 $position += 10
             );
 

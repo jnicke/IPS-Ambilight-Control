@@ -62,6 +62,16 @@ final class Driver
         }
     }
 
+    /**
+     * Liefert die Effektliste des Controllers.
+     *
+     * @return list<string>
+     */
+    public function readEffects(): array
+    {
+        return $this->client->getEffects();
+    }
+
     public function beginTransaction(): Transaction
     {
         $controller = $this->readController();
