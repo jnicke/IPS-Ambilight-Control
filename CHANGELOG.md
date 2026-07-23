@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.10
+
+- Neue Variable `WLEDPowerUsage`: Auslastung des Strombudgets in
+  Prozent, berechnet aus `WLEDCurrentPower` und `WLEDMaximumCurrent`
+- Ohne gesetztes Limit sowie bei Werten über dem Limit bleibt die
+  Anzeige in sinnvollen Grenzen (0 bzw. 100 %)
+- Hinweis: WLED rechnet den Verbrauch aus den Kanalwerten hoch, es ist
+  keine Messung. Der Weißkanal fließt dabei nicht ein, bei warmweißen
+  Szenen liegt der tatsächliche Strom also höher
+
 ## 0.5.9
 
 - Beim Wechsel in den Live-Modus werden die Segmente der folgenden

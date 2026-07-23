@@ -2112,6 +2112,7 @@ class MediaLight extends IPSModule
             ['bool', 'WLEDRGBW', 'WLED RGBW'],
             ['int', 'WLEDMaximumCurrent', 'WLED Stromlimit'],
             ['int', 'WLEDCurrentPower', 'WLED aktuelle Leistung', 'MEDIA.mA'],
+            ['int', 'WLEDPowerUsage', 'WLED Stromauslastung', 'MEDIA.Percent'],
             ['int', 'WLEDFPS', 'WLED FPS', 'MEDIA.FPS'],
             ['int', 'WLEDEffectCount', 'WLED Effekte'],
             ['int', 'WLEDPaletteCount', 'WLED Paletten'],

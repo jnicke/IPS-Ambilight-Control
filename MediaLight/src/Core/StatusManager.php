@@ -108,6 +108,10 @@ final class StatusManager
             'WLEDRGBW'           => $controller->isRgbw(),
             'WLEDMaximumCurrent' => $controller->getMaximumCurrent(),
             'WLEDCurrentPower'   => $controller->getCurrentPower(),
+            'WLEDPowerUsage'     => $this->calculatePowerUsage(
+                $controller->getCurrentPower(),
+                $controller->getMaximumCurrent()
+            ),
             'WLEDFPS'            => $controller->getFramesPerSecond(),
             'WLEDEffectCount'    => $controller->getEffectCount(),
             'WLEDPaletteCount'   => $controller->getPaletteCount(),
@@ -172,6 +176,7 @@ final class StatusManager
             'WLEDRGBW'           => false,
             'WLEDMaximumCurrent' => 0,
             'WLEDCurrentPower'   => 0,
+            'WLEDPowerUsage'     => 0,
             'WLEDFPS'            => 0,
             'WLEDEffectCount'    => 0,
             'WLEDPaletteCount'   => 0,
@@ -305,5 +310,23 @@ final class StatusManager
         foreach ($values as $ident => $value) {
             ($this->valueWriter)($ident, $value);
         }
+    }
+
+    /**
+     * Auslastung des WLED-Strombudgets in Prozent. WLED rechnet den
+     * Verbrauch aus den Kanalwerten hoch, es handelt sich nicht um eine
+     * Messung. Ohne gesetztes Limit ist keine Aussage moeglich.
+     */
+    private function calculatePowerUsage(
+        int $currentPower,
+        int $maximumCurrent
+    ): int {
+        if ($maximumCurrent <= 0) {
+            return 0;
+        }
+
+        $usage = (int) round($currentPower / $maximumCurrent * 100);
+
+        return max(0, min(100, $usage));
     }
 }
