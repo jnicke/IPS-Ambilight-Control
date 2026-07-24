@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0
+
+- Überwachung des Datenalters je Quelle. Eine Quelle kann erreichbar
+  sein und trotzdem veraltete Werte liefern – etwa wenn der
+  Apple-TV-Monitor zwar antwortet, seine pyatv-Sitzung aber hängt.
+  Bisher blieb der letzte bekannte Stand unbemerkt stehen
+- Neue Variablen `HyperHDRDataCurrent`, `WLEDDataCurrent` und
+  `AppleTVDataCurrent` (Profil `~Alert.Reversed`)
+- Neue Einstellung „Daten gelten als veraltet nach" (Vorgabe 60 s,
+  0 deaktiviert die Prüfung)
+- Beim Apple TV wird der Zeitpunkt des letzten Ereignisses
+  ausgewertet, nicht der Zeitpunkt des Abrufs
+
 ## 0.5.11
 
 - Ist der Apple TV ausgeschaltet (`power = off`), werden Wiedergabe-

@@ -6,7 +6,7 @@ dessen LED-Controller zusätzlich weitere, frei nutzbare LED-Stränge
 versorgt. Das Apple TV dient dabei als Ereignisquelle: Play, Pause und
 Standby schalten das Licht automatisch und praktisch verzögerungsfrei.
 
-Aktuelle Version: **0.5.11**
+Aktuelle Version: **0.6.0**
 
 ## Konzept
 
@@ -230,6 +230,7 @@ Hinweise:
 | `SegmentsInSync`, `LayoutHint` | Ergebnis der Layout-Konsistenzprüfung |
 | `WLEDPower`, `WLEDBrightness` | Master-Steuerung des Controllers |
 | `WLEDCurrentPower`, `WLEDPowerUsage` | errechneter Verbrauch in mA und % |
+| `…DataCurrent` | je Quelle: sind die Daten aktuell? |
 | `WLEDBus<N>…` | Buskonfiguration und Steuerung je Bus |
 | `Bus<N>FollowMode` | folgt der Bus dem Ambilight-Modus? |
 | `HyperHDR…` | HyperHDR-Status und Komponentenschalter |

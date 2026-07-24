@@ -19,6 +19,18 @@
                     "maximum": 3600
                 },
                 {
+                    "type": "NumberSpinner",
+                    "name": "DataTimeout",
+                    "caption": "Daten gelten als veraltet nach",
+                    "suffix": " Sekunden",
+                    "minimum": 0,
+                    "maximum": 3600
+                },
+                {
+                    "type": "Label",
+                    "caption": "Eine Quelle kann erreichbar sein und trotzdem veraltete Werte liefern. Die Variablen \"… Daten aktuell\" zeigen je Quelle an, ob der letzte Datenstand innerhalb dieser Zeitspanne liegt. 0 deaktiviert die Prüfung."
+                },
+                {
                     "type": "CheckBox",
                     "name": "DebugEnabled",
                     "caption": "Erweiterte Debug-Ausgabe"

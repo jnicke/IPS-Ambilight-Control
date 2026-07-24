@@ -128,6 +128,10 @@ class MediaLight extends IPSModule
     {
         parent::Create();
 
+        $this->RegisterAttributeInteger('LastHyperHDRData', 0);
+        $this->RegisterAttributeInteger('LastWLEDData', 0);
+        $this->RegisterAttributeInteger('LastAppleTVData', 0);
+
         $this->registerAmbilightModeProfile();
 
         $this->registerWLEDEffectProfile();
@@ -220,6 +224,7 @@ class MediaLight extends IPSModule
             try {
                 $status = $this->getHyperHDRDriver()->readStatus();
                 $this->getStatusManager()->applyHyperHDR($status);
+                $this->WriteAttributeInteger('LastHyperHDRData', time());
             } catch (Throwable $exception) {
                 $status = null;
 
@@ -239,6 +244,7 @@ class MediaLight extends IPSModule
             try {
                 $controller = $this->getWLEDDriver()->readController();
                 $this->getStatusManager()->applyWLED($controller);
+                $this->WriteAttributeInteger('LastWLEDData', time());
             } catch (Throwable $exception) {
                 $controller = null;
 
@@ -260,6 +266,13 @@ class MediaLight extends IPSModule
             try {
                 $appleTV = $this->getAppleTVDriver()->readStatus();
 
+                $this->WriteAttributeInteger(
+                    'LastAppleTVData',
+                    $appleTV->getLastEvent() > 0
+                        ? $appleTV->getLastEvent()
+                        : time()
+                );
+
                 $this->applyAppleTVStatus($appleTV);
                 $this->applyAppleTVAutomation($appleTV);
             } catch (Throwable $exception) {
@@ -272,6 +285,8 @@ class MediaLight extends IPSModule
                 );
             }
         }
+
+        $this->updateDataFreshness();
 
         $this->SetValue(
             'LastUpdate',
@@ -1371,6 +1386,13 @@ class MediaLight extends IPSModule
             $position += 10
         );
 
+        $this->RegisterVariableBoolean(
+            'AppleTVDataCurrent',
+            'Apple-TV-Daten aktuell',
+            '~Alert.Reversed',
+            $position += 10
+        );
+
         $this->RegisterVariableString(
             'AppleTVTitle',
             'Apple TV Titel',
@@ -1506,6 +1528,55 @@ class MediaLight extends IPSModule
                 ? date('d.m.Y H:i:s', $status->getLastEvent())
                 : ''
         );
+    }
+
+    /**
+     * Bewertet je Quelle, ob die zuletzt erhaltenen Daten noch aktuell
+     * sind. Eine Quelle kann erreichbar sein und trotzdem veraltete Werte
+     * liefern - etwa wenn der Apple-TV-Monitor zwar antwortet, seine
+     * pyatv-Sitzung aber haengt. Ohne diese Pruefung bleibt der letzte
+     * bekannte Stand unbemerkt stehen.
+     */
+    private function updateDataFreshness(): void
+    {
+        $this->SetValue(
+            'HyperHDRDataCurrent',
+            $this->ReadPropertyBoolean('HyperHDREnabled')
+                && $this->isDataCurrent(
+                    $this->ReadAttributeInteger('LastHyperHDRData')
+                )
+        );
+
+        $this->SetValue(
+            'WLEDDataCurrent',
+            $this->ReadPropertyBoolean('WLEDEnabled')
+                && $this->isDataCurrent(
+                    $this->ReadAttributeInteger('LastWLEDData')
+                )
+        );
+
+        $this->SetValue(
+            'AppleTVDataCurrent',
+            $this->ReadPropertyBoolean('AppleTVEnabled')
+                && $this->isDataCurrent(
+                    $this->ReadAttributeInteger('LastAppleTVData')
+                )
+        );
+    }
+
+    private function isDataCurrent(int $timestamp): bool
+    {
+        if ($timestamp <= 0) {
+            return false;
+        }
+
+        $timeout = $this->ReadPropertyInteger('DataTimeout');
+
+        if ($timeout <= 0) {
+            return true;
+        }
+
+        return (time() - $timestamp) <= $timeout;
     }
 
     private function isAppleTVPoweredOff(AppleTVStatus $status): bool
@@ -1861,6 +1932,7 @@ class MediaLight extends IPSModule
     {
         $this->RegisterPropertyBoolean('Active', true);
         $this->RegisterPropertyInteger('UpdateInterval', 10);
+        $this->RegisterPropertyInteger('DataTimeout', 60);
         $this->RegisterPropertyBoolean('DebugEnabled', false);
 
         $this->RegisterPropertyBoolean('HyperHDREnabled', true);
@@ -2102,6 +2174,13 @@ class MediaLight extends IPSModule
             '',
             $position += 10
         );
+
+        $this->RegisterVariableBoolean(
+            'HyperHDRDataCurrent',
+            'HyperHDR-Daten aktuell',
+            '~Alert.Reversed',
+            $position += 10
+        );
     }
 
     private function registerDisplayProfiles(): void
@@ -2148,6 +2227,7 @@ class MediaLight extends IPSModule
             ['int', 'WLEDMaximumCurrent', 'WLED Stromlimit'],
             ['int', 'WLEDCurrentPower', 'WLED aktuelle Leistung', 'MEDIA.mA'],
             ['int', 'WLEDPowerUsage', 'WLED Stromauslastung', 'MEDIA.Percent'],
+            ['bool', 'WLEDDataCurrent', 'WLED-Daten aktuell', '~Alert.Reversed'],
             ['int', 'WLEDFPS', 'WLED FPS', 'MEDIA.FPS'],
             ['int', 'WLEDEffectCount', 'WLED Effekte'],
             ['int', 'WLEDPaletteCount', 'WLED Paletten'],
