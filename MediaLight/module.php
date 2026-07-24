@@ -1490,9 +1490,42 @@ class MediaLight extends IPSModule
     ): void {
         $this->SetValue('AppleTVOnline', $status->isOnline());
         $this->SetValue('AppleTVPower', $status->getPower());
+
+        if ($this->isAppleTVPoweredOff($status)) {
+            $this->applyAppleTVStandby($status);
+
+            return;
+        }
+
         $this->SetValue('AppleTVState', $status->getState());
         $this->applyAppleTVApp($status);
         $this->SetValue('AppleTVTitle', $status->getTitle());
+        $this->SetValue(
+            'AppleTVLastEvent',
+            $status->getLastEvent() > 0
+                ? date('d.m.Y H:i:s', $status->getLastEvent())
+                : ''
+        );
+    }
+
+    private function isAppleTVPoweredOff(AppleTVStatus $status): bool
+    {
+        return strtolower(trim($status->getPower())) === 'off';
+    }
+
+    /**
+     * Ein ausgeschalteter Apple TV kann nichts wiedergeben. pyatv meldet
+     * beim Ausschalten jedoch nur den Wechsel von power_state; Status,
+     * App und Titel bleiben auf dem letzten Stand stehen. Diese Werte
+     * werden deshalb aktiv zurueckgesetzt, damit die Anzeige nicht
+     * weiterhin eine laufende Wiedergabe vortaeuscht.
+     */
+    private function applyAppleTVStandby(AppleTVStatus $status): void
+    {
+        $this->SetValue('AppleTVState', 'idle');
+        $this->SetValue('AppleTVApp', '');
+        $this->SetValue('AppleTVAppCurrent', false);
+        $this->SetValue('AppleTVTitle', '');
         $this->SetValue(
             'AppleTVLastEvent',
             $status->getLastEvent() > 0
@@ -1554,7 +1587,9 @@ class MediaLight extends IPSModule
             return;
         }
 
-        $state = $status->getState();
+        $state = $this->isAppleTVPoweredOff($status)
+            ? 'standby'
+            : $status->getState();
         $appId = $status->getAppId();
 
         $lastState = $this->ReadAttributeString('LastAppleTVState');

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.11
+
+- Ist der Apple TV ausgeschaltet (`power = off`), werden Wiedergabe-
+  status, App und Titel zurückgesetzt. pyatv meldet beim Ausschalten
+  nur den Wechsel von `power_state`; die übrigen Werte blieben auf dem
+  letzten Stand stehen und täuschten eine laufende Wiedergabe vor
+- Die Apple-TV-Automatik behandelt `power = off` wie den Zustand
+  `standby`. Zuvor konnte ein stehengebliebenes `paused` die
+  Pausiert-Regel der zuletzt aktiven App auslösen, obwohl das Gerät
+  aus war
+
 ## 0.5.10
 
 - Neue Variable `WLEDPowerUsage`: Auslastung des Strombudgets in
