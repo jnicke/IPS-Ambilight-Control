@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0
+
+- Neue Schaltfläche „Diagnose" im Instanzformular. Sie prüft in einem
+  Durchlauf die Kette, die darüber entscheidet, ob ein Bus leuchtet:
+  Datenalter je Quelle, globaler Hauptschalter, Helligkeit, Realtime,
+  Modus sowie je Bus Segmentzustand, Helligkeit, Effekt und
+  Follow-Modus
+- Bleibt ein Bus dunkel, nennt die Ausgabe den Grund im Klartext –
+  etwa „Hauptschalter aus", „Segment aus" oder „Segment eingefroren
+  ohne Live-Stream"
+- Zusätzlich Schaltfläche „Bus 1 testen"; Bus 1 ist seit 0.5.4
+  einzeln steuerbar, im Formular fehlte der Eintrag
+
 ## 0.6.0
 
 - Überwachung des Datenalters je Quelle. Eine Quelle kann erreichbar

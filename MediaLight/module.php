@@ -19,6 +19,7 @@ use MediaLight\Drivers\WLED\Mapper as WLEDMapper;
 use MediaLight\Models\AppleTV\Status as AppleTVStatus;
 use MediaLight\Models\HyperHDR\Status as HyperHDRStatus;
 use MediaLight\Models\WLED\Controller as WLEDController;
+use MediaLight\Models\WLED\Segment as WLEDSegment;
 
 Autoloader::register(__DIR__ . '/src');
 
@@ -329,6 +330,169 @@ class MediaLight extends IPSModule
         if ($Message === IPS_KERNELSTARTED) {
             $this->registerHook(self::WEBHOOK_PATH);
         }
+    }
+
+    /**
+     * Prueft in einem Durchlauf die Kette, die darueber entscheidet, ob ein
+     * Bus tatsaechlich leuchtet: globaler Schalter, Segmentzustand,
+     * Realtime-Freeze, Follow-Modus und Datenalter. Jede dieser Ebenen
+     * kann fuer sich korrekt aussehen, waehrend der Strip dunkel bleibt.
+     */
+    public function Diagnose(): void
+    {
+        $lines = [];
+
+        try {
+            $lines[] = $this->diagnoseDataFreshness();
+            $lines[] = '';
+            $lines[] = $this->diagnoseWLED();
+        } catch (Throwable $exception) {
+            $this->logException('Diagnose fehlgeschlagen', $exception);
+
+            echo 'Diagnose fehlgeschlagen: ' . $exception->getMessage();
+
+            return;
+        }
+
+        echo implode(PHP_EOL, $lines);
+    }
+
+    private function diagnoseDataFreshness(): string
+    {
+        $lines = ['Datenalter'];
+
+        $sources = [
+            'HyperHDR' => ['HyperHDREnabled', 'LastHyperHDRData'],
+            'WLED'     => ['WLEDEnabled', 'LastWLEDData'],
+            'Apple TV' => ['AppleTVEnabled', 'LastAppleTVData']
+        ];
+
+        foreach ($sources as $label => [$property, $attribute]) {
+            if (!$this->ReadPropertyBoolean($property)) {
+                $lines[] = sprintf('  %-9s deaktiviert', $label);
+
+                continue;
+            }
+
+            $timestamp = $this->ReadAttributeInteger($attribute);
+
+            if ($timestamp <= 0) {
+                $lines[] = sprintf(
+                    '  %-9s noch keine Daten empfangen',
+                    $label
+                );
+
+                continue;
+            }
+
+            $age = time() - $timestamp;
+
+            $lines[] = sprintf(
+                '  %-9s %s (%d s alt)',
+                $label,
+                $this->isDataCurrent($timestamp) ? 'aktuell' : 'VERALTET',
+                $age
+            );
+        }
+
+        return implode(PHP_EOL, $lines);
+    }
+
+    private function diagnoseWLED(): string
+    {
+        if (!$this->ReadPropertyBoolean('WLEDEnabled')) {
+            return 'WLED ist deaktiviert.';
+        }
+
+        $controller = $this->getWLEDDriver()->readController();
+        $state = $controller->getState();
+
+        $lines = ['Controller'];
+
+        $globalOn = $state->isOn();
+
+        $lines[] = sprintf(
+            '  Hauptschalter    %s',
+            $globalOn ? 'ein' : 'AUS - alle Busse bleiben dunkel'
+        );
+
+        $lines[] = sprintf(
+            '  Helligkeit       %d',
+            $state->getBrightness()
+        );
+
+        $realtime = $state->isRealtime();
+
+        $lines[] = sprintf(
+            '  Realtime         %s',
+            $realtime ? 'aktiv (HyperHDR bespielt Bus 1)' : 'inaktiv'
+        );
+
+        $mode = (int) $this->GetValue('AmbilightMode');
+
+        $lines[] = sprintf('  Modus            %d', $mode);
+        $lines[] = '';
+        $lines[] = 'Busse';
+
+        for ($busNumber = 1; $busNumber <= 4; $busNumber++) {
+            $lines[] = $this->diagnoseBus(
+                $busNumber,
+                $state->getSegment($busNumber - 1),
+                $globalOn,
+                $realtime
+            );
+        }
+
+        return implode(PHP_EOL, $lines);
+    }
+
+    private function diagnoseBus(
+        int $busNumber,
+        ?WLEDSegment $segment,
+        bool $globalOn,
+        bool $realtime
+    ): string {
+        if (!$segment instanceof WLEDSegment) {
+            return sprintf('  Bus %d            kein Segment vorhanden', $busNumber);
+        }
+
+        $follows = (bool) $this->GetValue(
+            'Bus' . $busNumber . 'FollowMode'
+        );
+
+        $reasons = [];
+
+        if (!$globalOn) {
+            $reasons[] = 'Hauptschalter aus';
+        }
+
+        if (!$segment->isOn()) {
+            $reasons[] = 'Segment aus';
+        }
+
+        if ($segment->getBrightness() <= 5) {
+            $reasons[] = sprintf(
+                'Helligkeit %d',
+                $segment->getBrightness()
+            );
+        }
+
+        if ($segment->isFrozen() && !$realtime) {
+            $reasons[] = 'Segment eingefroren ohne Live-Stream';
+        }
+
+        return sprintf(
+            '  Bus %d            %s | Helligkeit %3d | Effekt %3d | %s%s',
+            $busNumber,
+            $segment->isOn() ? 'ein' : 'aus',
+            $segment->getBrightness(),
+            $segment->getEffect(),
+            $follows ? 'folgt Modus' : 'frei',
+            $reasons === []
+                ? ''
+                : PHP_EOL . '                   -> dunkel: '
+                    . implode(', ', $reasons)
+        );
     }
 
     public function TestCore(): void
